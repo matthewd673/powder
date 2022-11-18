@@ -6,6 +6,11 @@
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 800
 
+#define WORLD_WIDTH 200
+#define WORLD_HEIGHT 200
+
+#define PARTICLE_SCALE 4
+
 SDL_Window *gWindow = NULL;
 SDL_Surface *gScreenSurface = NULL;
 SDL_Surface *gCanvas = NULL;
@@ -66,18 +71,49 @@ int main(int argc, char *argv[]) {
 
         if ((mButtons & SDL_BUTTON_LEFT) != 0) {
             Particle_setType(
-                World_getParticle(w, mX, mY),
+                World_getParticle(w, mX / PARTICLE_SCALE, mY / PARTICLE_SCALE),
                 0x1
             );
             // printf("draw %d %d\n", mX, mY);
+        }
+
+        // update
+        Particle current;
+        for (short i = 0; i < WORLD_WIDTH; i++) {
+            for (short j = 0; j < WORLD_HEIGHT; j++) {
+                current = World_getParticle(w, i, j);
+                
+                if (Particle_getTicked(current)) {
+                    Particle_setTicked(current, 0);
+                    continue;
+                }
+
+                switch (Particle_getType(current)) {
+                    case 0x1:
+                        if (j < WORLD_HEIGHT - 1 &&
+                            Particle_getType(World_getParticle(w, i, j + 1)) == 0x0) {
+                                World_swapParticle(w, i, j, i, j + 1);
+                            }
+                        else if (j < WORLD_HEIGHT - 1 && i >= 0 &&
+                                 Particle_getType(World_getParticle(w, i - 1, j + 1)) == 0x0) {
+                                    World_swapParticle(w, i, j, i - 1, j + 1);
+                                 }
+                        else if (j < WORLD_HEIGHT - 1 && i < WORLD_WIDTH &&
+                                 Particle_getType(World_getParticle(w, i + 1, j + 1)) == 0x0) {
+                                    World_swapParticle(w, i, j, i + 1, j + 1);
+                                 }
+                    break;
+                }
+                Particle_setTicked(current, 1);
+            }
         }
 
         // render
         SDL_FillRect(gScreenSurface, NULL, 0x0);
         SDL_FillRect(gCanvas, NULL, 0x0);
 
-        for (short i = 0; i < WINDOW_WIDTH; i++) {
-            for (short j = 0; j < WINDOW_HEIGHT; j++) {
+        for (short i = 0; i < WORLD_WIDTH; i++) {
+            for (short j = 0; j < WORLD_HEIGHT; j++) {
                 Uint32 col = 0x0;
                 switch (Particle_getType(World_getParticle(w, i, j))) {
                     case 0x1:
@@ -85,7 +121,11 @@ int main(int argc, char *argv[]) {
                         break;
                 }
 
-                SetPixel(gCanvas, i, j, col);
+                for (int k = 0; k < PARTICLE_SCALE; k++) {
+                    for (int l = 0; l < PARTICLE_SCALE; l++) {
+                        SetPixel(gCanvas, i*PARTICLE_SCALE + k, j*PARTICLE_SCALE + l, col);
+                    }
+                }
             }
         }
 
