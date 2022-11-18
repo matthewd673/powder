@@ -69,27 +69,27 @@ int main(int argc, char *argv[]) {
                 World_getParticle(w, mX, mY),
                 0x1
             );
+            // printf("draw %d %d\n", mX, mY);
         }
 
         // render
         SDL_FillRect(gScreenSurface, NULL, 0x0);
         SDL_FillRect(gCanvas, NULL, 0x0);
 
-        // for (short i = 0; i < WINDOW_WIDTH; i++) {
-        //     for (short j = 0; j < WINDOW_HEIGHT; j++) {
-        //         Uint32 col = 0x0;
-        //         switch (Particle_getType(World_getParticle(w, i, j))) {
-        //             case 0x1:
-        //                 printf("particle type 0x1\n");
-        //                 col = 0xff000000;
-        //                 break;
-        //         }
+        for (short i = 0; i < WINDOW_WIDTH; i++) {
+            for (short j = 0; j < WINDOW_HEIGHT; j++) {
+                Uint32 col = 0x0;
+                switch (Particle_getType(World_getParticle(w, i, j))) {
+                    case 0x1:
+                        col = 0xff0000ff;
+                        break;
+                }
 
-        //         // SetPixel(gCanvas, i, j, col);
-        //     }
-        // }
+                SetPixel(gCanvas, i, j, col);
+            }
+        }
 
-        printf("done draw\n");
+        // printf("done draw\n");
 
         SDL_BlitSurface(gCanvas, NULL, gScreenSurface, NULL);
         SDL_UpdateWindowSurface(gWindow);

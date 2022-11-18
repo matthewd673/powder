@@ -42,15 +42,15 @@ World new_World(short width, short height) {
     this->h = height;
 
     printf("world size: %d\n", width * height);
-    Particle *grid = (Particle *)malloc(width * height * sizeof(struct Particle));
+    Particle *grid = (Particle *)malloc(width * height * sizeof(Particle));
     if (grid == NULL) {
         return NULL;
     }
 
-    // for (int i = 0; i < width * height; i++) {
-    //     grid[i] = new_Particle(0x0);
-    // }
-    printf("done init\n");
+    for (int i = 0; i < width * height; i++) {
+        grid[i] = new_Particle(0x0);
+    }
+    printf("done world init\n");
     this->p = grid;
 
     return this;
