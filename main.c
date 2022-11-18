@@ -11,6 +11,10 @@
 
 #define PARTICLE_SCALE 4
 
+#define PTYPE_NONE 0x0
+#define PTYPE_SAND 0x1
+#define PTYPE_WATER 0x2
+
 SDL_Window *gWindow = NULL;
 SDL_Surface *gScreenSurface = NULL;
 SDL_Surface *gCanvas = NULL;
@@ -39,20 +43,37 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    World w = new_World(WINDOW_WIDTH, WINDOW_HEIGHT);
+    World w = new_World(WORLD_WIDTH, WORLD_HEIGHT);
 
     SDL_Event e;
     int mX, mY;
     Uint32 mButtons;
 
+    char newParticleType = 0x1;
+
     int loop = 1;
     while (loop) {
+
         // event loop
         while (SDL_PollEvent(&e) != 0) {
             if (e.type == SDL_QUIT) {
                 loop = 0;
             }
+            else if (e.type == SDL_KEYDOWN) {
+                switch (e.key.keysym.sym) {
+                    case SDLK_ESCAPE:
+                        loop = 0;
+                    break;
+                    case SDLK_1:
+                        newParticleType = PTYPE_SAND;
+                    break;
+                    case SDLK_2:
+                        newParticleType = PTYPE_WATER;
+                    break;
+                }
+            }
         }
+
 
         // mouse state input
         mButtons = SDL_GetMouseState(&mX, &mY);
@@ -72,7 +93,7 @@ int main(int argc, char *argv[]) {
         if ((mButtons & SDL_BUTTON_LEFT) != 0) {
             Particle_setType(
                 World_getParticle(w, mX / PARTICLE_SCALE, mY / PARTICLE_SCALE),
-                0x1
+                newParticleType
             );
             // printf("draw %d %d\n", mX, mY);
         }
@@ -91,16 +112,30 @@ int main(int argc, char *argv[]) {
                 switch (Particle_getType(current)) {
                     case 0x1:
                         if (j < WORLD_HEIGHT - 1 &&
-                            Particle_getType(World_getParticle(w, i, j + 1)) == 0x0) {
+                            Particle_getType(World_getParticle(w, i, j + 1)) == PTYPE_NONE) {
                                 World_swapParticle(w, i, j, i, j + 1);
                             }
-                        else if (j < WORLD_HEIGHT - 1 && i >= 0 &&
-                                 Particle_getType(World_getParticle(w, i - 1, j + 1)) == 0x0) {
+                        else if (j < WORLD_HEIGHT - 1 && i > 0 &&
+                                 Particle_getType(World_getParticle(w, i - 1, j + 1)) == PTYPE_NONE) {
                                     World_swapParticle(w, i, j, i - 1, j + 1);
                                  }
-                        else if (j < WORLD_HEIGHT - 1 && i < WORLD_WIDTH &&
-                                 Particle_getType(World_getParticle(w, i + 1, j + 1)) == 0x0) {
+                        else if (j < WORLD_HEIGHT - 1 && i < WORLD_WIDTH - 1 &&
+                                 Particle_getType(World_getParticle(w, i + 1, j + 1)) == PTYPE_NONE) {
                                     World_swapParticle(w, i, j, i + 1, j + 1);
+                                 }
+                    break;
+                    case 0x2:
+                        if (j < WORLD_HEIGHT - 1 &&
+                            Particle_getType(World_getParticle(w, i, j + 1)) == PTYPE_NONE) {
+                                World_swapParticle(w, i, j, i, j + 1);
+                            }
+                        else if (i > 0 &&
+                                 Particle_getType(World_getParticle(w, i - 1, j)) == PTYPE_NONE) {
+                                    World_swapParticle(w, i, j, i - 1, j);
+                                 }
+                        else if (i < WORLD_WIDTH - 1 &&
+                                 Particle_getType(World_getParticle(w, i + 1, j)) == PTYPE_NONE) {
+                                    World_swapParticle(w, i, j, i + 1, j);
                                  }
                     break;
                 }
@@ -116,8 +151,11 @@ int main(int argc, char *argv[]) {
             for (short j = 0; j < WORLD_HEIGHT; j++) {
                 Uint32 col = 0x0;
                 switch (Particle_getType(World_getParticle(w, i, j))) {
-                    case 0x1:
+                    case PTYPE_SAND:
                         col = 0xff0000ff;
+                        break;
+                    case PTYPE_WATER:
+                        col = 0x0000ffff;
                         break;
                 }
 
