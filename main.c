@@ -11,10 +11,6 @@
 
 #define PARTICLE_SCALE 4
 
-#define PTYPE_NONE 0x0
-#define PTYPE_SAND 0x1
-#define PTYPE_WATER 0x2
-
 SDL_Window *gWindow = NULL;
 SDL_Surface *gScreenSurface = NULL;
 SDL_Surface *gCanvas = NULL;
@@ -53,7 +49,6 @@ int main(int argc, char *argv[]) {
 
     int loop = 1;
     while (loop) {
-
         // event loop
         while (SDL_PollEvent(&e) != 0) {
             if (e.type == SDL_QUIT) {
@@ -69,6 +64,9 @@ int main(int argc, char *argv[]) {
                     break;
                     case SDLK_2:
                         newParticleType = PTYPE_WATER;
+                    break;
+                    case SDLK_3:
+                        newParticleType = PTYPE_WOOD;
                     break;
                 }
             }
@@ -99,49 +97,7 @@ int main(int argc, char *argv[]) {
         }
 
         // update
-        Particle current;
-        for (short i = 0; i < WORLD_WIDTH; i++) {
-            for (short j = 0; j < WORLD_HEIGHT; j++) {
-                current = World_getParticle(w, i, j);
-                
-                if (Particle_getTicked(current)) {
-                    Particle_setTicked(current, 0);
-                    continue;
-                }
-
-                switch (Particle_getType(current)) {
-                    case 0x1:
-                        if (j < WORLD_HEIGHT - 1 &&
-                            Particle_getType(World_getParticle(w, i, j + 1)) == PTYPE_NONE) {
-                                World_swapParticle(w, i, j, i, j + 1);
-                            }
-                        else if (j < WORLD_HEIGHT - 1 && i > 0 &&
-                                 Particle_getType(World_getParticle(w, i - 1, j + 1)) == PTYPE_NONE) {
-                                    World_swapParticle(w, i, j, i - 1, j + 1);
-                                 }
-                        else if (j < WORLD_HEIGHT - 1 && i < WORLD_WIDTH - 1 &&
-                                 Particle_getType(World_getParticle(w, i + 1, j + 1)) == PTYPE_NONE) {
-                                    World_swapParticle(w, i, j, i + 1, j + 1);
-                                 }
-                    break;
-                    case 0x2:
-                        if (j < WORLD_HEIGHT - 1 &&
-                            Particle_getType(World_getParticle(w, i, j + 1)) == PTYPE_NONE) {
-                                World_swapParticle(w, i, j, i, j + 1);
-                            }
-                        else if (i > 0 &&
-                                 Particle_getType(World_getParticle(w, i - 1, j)) == PTYPE_NONE) {
-                                    World_swapParticle(w, i, j, i - 1, j);
-                                 }
-                        else if (i < WORLD_WIDTH - 1 &&
-                                 Particle_getType(World_getParticle(w, i + 1, j)) == PTYPE_NONE) {
-                                    World_swapParticle(w, i, j, i + 1, j);
-                                 }
-                    break;
-                }
-                Particle_setTicked(current, 1);
-            }
-        }
+        World_simulate(w);
 
         // render
         SDL_FillRect(gScreenSurface, NULL, 0x0);
@@ -152,10 +108,13 @@ int main(int argc, char *argv[]) {
                 Uint32 col = 0x0;
                 switch (Particle_getType(World_getParticle(w, i, j))) {
                     case PTYPE_SAND:
-                        col = 0xff0000ff;
+                        col = 0xdab163ff;
                         break;
                     case PTYPE_WATER:
-                        col = 0x0000ffff;
+                        col = 0x3388deff;
+                        break;
+                    case PTYPE_WOOD:
+                        col = 0x94493aff;
                         break;
                 }
 

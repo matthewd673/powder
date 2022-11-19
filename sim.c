@@ -82,3 +82,52 @@ void World_swapParticle(World w, short x1, short y1, short x2, short y2) {
     w->p[y1 * w->w + x1] = w->p[y2 * w->w + x2];
     w->p[y2 * w->w + x2] = temp;
 }
+
+void World_simulate(World w) {
+    // update
+    Particle current;
+    for (short i = 0; i < w->w; i++) {
+        for (short j = 0; j < w->h; j++) {
+            current = World_getParticle(w, i, j);
+            
+            if (Particle_getTicked(current)) {
+                Particle_setTicked(current, 0);
+                continue;
+            }
+
+            switch (Particle_getType(current)) {
+                case PTYPE_SAND:
+                    if (j < w->h - 1 &&
+                        Particle_getType(World_getParticle(w, i, j + 1)) == PTYPE_NONE) {
+                            World_swapParticle(w, i, j, i, j + 1);
+                        }
+                    else if (j < w->h - 1 && i > 0 &&
+                                Particle_getType(World_getParticle(w, i - 1, j + 1)) == PTYPE_NONE) {
+                                World_swapParticle(w, i, j, i - 1, j + 1);
+                                }
+                    else if (j < w->h - 1 && i < w->w - 1 &&
+                                Particle_getType(World_getParticle(w, i + 1, j + 1)) == PTYPE_NONE) {
+                                World_swapParticle(w, i, j, i + 1, j + 1);
+                                }
+                break;
+                case PTYPE_WATER:
+                    if (j < w->h - 1 &&
+                        Particle_getType(World_getParticle(w, i, j + 1)) == PTYPE_NONE) {
+                            World_swapParticle(w, i, j, i, j + 1);
+                        }
+                    else if (i > 0 &&
+                                Particle_getType(World_getParticle(w, i - 1, j)) == PTYPE_NONE) {
+                                World_swapParticle(w, i, j, i - 1, j);
+                                }
+                    else if (i < w->w - 1 &&
+                                Particle_getType(World_getParticle(w, i + 1, j)) == PTYPE_NONE) {
+                                World_swapParticle(w, i, j, i + 1, j);
+                                }
+                break;
+                case PTYPE_WOOD:
+                break;
+            }
+            Particle_setTicked(current, 1);
+        }
+    }
+}
