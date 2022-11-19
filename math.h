@@ -1,0 +1,1 @@
+float clamp(float f, float min, float max);

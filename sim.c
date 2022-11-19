@@ -1,10 +1,17 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "sim.h"
+#include "math.h"
+
+// rough approximation
+#define GRAVITY_A   .1568f
+#define START_VEL   1.f;
+#define MAX_VEL     9.8f
 
 struct Particle {
     char type;
     char ticked;
+    float velocity;
 };
 
 struct World {
@@ -22,6 +29,7 @@ Particle new_Particle(char type) {
 
     this->type = type;
     this->ticked = 0;
+    this->velocity = START_VEL;
 
     return this;
 }
@@ -31,13 +39,6 @@ char Particle_getType(Particle p) {
 }
 void Particle_setType(Particle p, char type) {
     p->type = type;
-}
-
-char Particle_getTicked(Particle p) {
-    return p->ticked;
-}
-void Particle_setTicked(Particle p, char ticked) {
-    p->ticked = ticked;
 }
 
 World new_World(short width, short height) {
@@ -90,44 +91,76 @@ void World_simulate(World w) {
         for (short j = 0; j < w->h; j++) {
             current = World_getParticle(w, i, j);
             
-            if (Particle_getTicked(current)) {
-                Particle_setTicked(current, 0);
+            if (current->ticked) {
+                current->ticked = 0;
                 continue;
             }
 
-            switch (Particle_getType(current)) {
+            int lastOpen;
+            switch (current->type) {
                 case PTYPE_SAND:
-                    if (j < w->h - 1 &&
-                        Particle_getType(World_getParticle(w, i, j + 1)) == PTYPE_NONE) {
-                            World_swapParticle(w, i, j, i, j + 1);
+                    // skip sand at bottom of screen
+                    if (j == w->h - 1) {
+                        break;
+                    }
+
+                    lastOpen = j;
+                    for (int k = 1; k <= current->velocity; k++) {
+                        if (j + k < w->h &&
+                            World_getParticle(w, i, j + k)->type == PTYPE_NONE) {
+                                lastOpen = j + k;
+                            }
+                        else {
+                            break;
                         }
-                    else if (j < w->h - 1 && i > 0 &&
-                                Particle_getType(World_getParticle(w, i - 1, j + 1)) == PTYPE_NONE) {
-                                World_swapParticle(w, i, j, i - 1, j + 1);
-                                }
-                    else if (j < w->h - 1 && i < w->w - 1 &&
-                                Particle_getType(World_getParticle(w, i + 1, j + 1)) == PTYPE_NONE) {
-                                World_swapParticle(w, i, j, i + 1, j + 1);
-                                }
+                    }
+                    if (lastOpen != j) {
+                        World_swapParticle(w, i, j, i, lastOpen);
+                        current->velocity = clamp(current->velocity + GRAVITY_A, -MAX_VEL, MAX_VEL);
+                    }
+                    else if (i > 0 && World_getParticle(w, i - 1, j + 1)->type == PTYPE_NONE) {
+                        World_swapParticle(w, i, j, i - 1, j + 1);
+                        current->velocity = START_VEL;
+                    }
+                    else if (i < w->w - 1 && World_getParticle(w, i + 1, j + 1)->type == PTYPE_NONE) {
+                        World_swapParticle(w, i, j, i + 1, j + 1);
+                        current->velocity = START_VEL;
+                    }
+                    else {
+                        current->velocity = START_VEL;
+                    }
+                    // if (j < w->h - 1 &&
+                    //     World_getParticle(w, i, j + 1)->type == PTYPE_NONE) {
+                    //         World_swapParticle(w, i, j, i, j + 1);
+                    //         current->velocity = clamp(current->velocity + GRAVITY_A, -10.f, 10.f);
+                    //     }
+                    // else if (j < w->h - 1 && i > 0 &&
+                    //             World_getParticle(w, i - 1, j + 1)->type == PTYPE_NONE) {
+                    //             World_swapParticle(w, i, j, i - 1, j + 1);
+                    //             }
+                    // else if (j < w->h - 1 && i < w->w - 1 &&
+                    //             World_getParticle(w, i + 1, j + 1)->type == PTYPE_NONE) {
+                    //             World_swapParticle(w, i, j, i + 1, j + 1);
+                    //             }
                 break;
                 case PTYPE_WATER:
                     if (j < w->h - 1 &&
-                        Particle_getType(World_getParticle(w, i, j + 1)) == PTYPE_NONE) {
+                        World_getParticle(w, i, j + 1)->type == PTYPE_NONE) {
                             World_swapParticle(w, i, j, i, j + 1);
                         }
                     else if (i > 0 &&
-                                Particle_getType(World_getParticle(w, i - 1, j)) == PTYPE_NONE) {
+                                World_getParticle(w, i - 1, j)->type == PTYPE_NONE) {
                                 World_swapParticle(w, i, j, i - 1, j);
                                 }
                     else if (i < w->w - 1 &&
-                                Particle_getType(World_getParticle(w, i + 1, j)) == PTYPE_NONE) {
+                                World_getParticle(w, i + 1, j)->type == PTYPE_NONE) {
                                 World_swapParticle(w, i, j, i + 1, j);
                                 }
                 break;
                 case PTYPE_WOOD:
                 break;
             }
-            Particle_setTicked(current, 1);
+            current->ticked = 1;
         }
     }
 }
