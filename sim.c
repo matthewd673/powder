@@ -4,14 +4,18 @@
 #include "math.h"
 
 // rough approximation
-#define GRAVITY_A   .1568f
-#define START_VEL   1.f;
-#define MAX_VEL     9.8f
+#define GRAVITY_ACC     .1568f
+#define START_VEL       1.f
+#define MAX_VEL         9.8f
+#define SPREAD_ACC      .0157f
+#define START_SPREAD    0.f
+#define MAX_SPREAD      2.f
 
 struct Particle {
     char type;
     char ticked;
-    float velocity;
+    float vel;
+    float spreadVel;
 };
 
 struct World {
@@ -29,7 +33,7 @@ Particle new_Particle(char type) {
 
     this->type = type;
     this->ticked = 0;
-    this->velocity = START_VEL;
+    this->vel = START_VEL;
 
     return this;
 }
@@ -96,7 +100,8 @@ void World_simulate(World w) {
                 continue;
             }
 
-            int lastOpen;
+            int moveX;
+            int moveY;
             switch (current->type) {
                 case PTYPE_SAND:
                     // skip sand at bottom of screen
@@ -104,58 +109,99 @@ void World_simulate(World w) {
                         break;
                     }
 
-                    lastOpen = j;
-                    for (int k = 1; k <= current->velocity; k++) {
+                    moveY = j;
+                    for (int k = 1; k <= current->vel; k++) {
                         if (j + k < w->h &&
                             World_getParticle(w, i, j + k)->type == PTYPE_NONE) {
-                                lastOpen = j + k;
+                                moveY = j + k;
                             }
                         else {
                             break;
                         }
                     }
-                    if (lastOpen != j) {
-                        World_swapParticle(w, i, j, i, lastOpen);
-                        current->velocity = clamp(current->velocity + GRAVITY_A, -MAX_VEL, MAX_VEL);
+                    // MOVE INTO PILE
+                    if (moveY != j) {
+                        World_swapParticle(w, i, j, i, moveY);
+                        current->vel = clamp(current->vel + GRAVITY_ACC, -MAX_VEL, MAX_VEL);
                     }
                     else if (i > 0 && World_getParticle(w, i - 1, j + 1)->type == PTYPE_NONE) {
                         World_swapParticle(w, i, j, i - 1, j + 1);
-                        current->velocity = START_VEL;
+                        current->vel = START_VEL;
                     }
                     else if (i < w->w - 1 && World_getParticle(w, i + 1, j + 1)->type == PTYPE_NONE) {
                         World_swapParticle(w, i, j, i + 1, j + 1);
-                        current->velocity = START_VEL;
+                        current->vel = START_VEL;
                     }
+                    // NO MOVE
                     else {
-                        current->velocity = START_VEL;
+                        current->vel = START_VEL;
                     }
-                    // if (j < w->h - 1 &&
-                    //     World_getParticle(w, i, j + 1)->type == PTYPE_NONE) {
-                    //         World_swapParticle(w, i, j, i, j + 1);
-                    //         current->velocity = clamp(current->velocity + GRAVITY_A, -10.f, 10.f);
-                    //     }
-                    // else if (j < w->h - 1 && i > 0 &&
-                    //             World_getParticle(w, i - 1, j + 1)->type == PTYPE_NONE) {
-                    //             World_swapParticle(w, i, j, i - 1, j + 1);
-                    //             }
-                    // else if (j < w->h - 1 && i < w->w - 1 &&
-                    //             World_getParticle(w, i + 1, j + 1)->type == PTYPE_NONE) {
-                    //             World_swapParticle(w, i, j, i + 1, j + 1);
-                    //             }
                 break;
                 case PTYPE_WATER:
-                    if (j < w->h - 1 &&
-                        World_getParticle(w, i, j + 1)->type == PTYPE_NONE) {
-                            World_swapParticle(w, i, j, i, j + 1);
+                    moveY = j;
+
+                    for (int k = 1; k <= current->vel; k++) {
+                        if (j + k < w->h &&
+                            World_getParticle(w, i, j + k)->type == PTYPE_NONE) {
+                                moveY = j + k;
+                            }
+                        else {
+                            break;
                         }
-                    else if (i > 0 &&
-                                World_getParticle(w, i - 1, j)->type == PTYPE_NONE) {
-                                World_swapParticle(w, i, j, i - 1, j);
+                    }
+
+                    // MOVE INTO PILE (LIKE SAND)
+                    if (moveY != j) {
+                        World_swapParticle(w, i, j, i, moveY);
+                        current->vel = clamp(current->vel + GRAVITY_ACC, -MAX_VEL, MAX_VEL);
+                    }
+                    else if (j < w->h - 1 && i > 0 && World_getParticle(w, i - 1, j + 1)->type == PTYPE_NONE) {
+                        World_swapParticle(w, i, j, i - 1, j + 1);
+                        current->vel = START_VEL;
+                    }
+                    else if (j < w->h - 1 && i < w->w - 1 && World_getParticle(w, i + 1, j + 1)->type == PTYPE_NONE) {
+                        World_swapParticle(w, i, j, i + 1, j + 1);
+                        current->vel = START_VEL;
+                    }
+                    // MOVE INTO SPREAD
+                    else if (i > 0 && World_getParticle(w, i - 1, j)->type == PTYPE_NONE) {
+                        moveX = i;
+                        for (int k = 1; k <= current->spreadVel; k++) {
+                            if (i - k >= 0 &&
+                                World_getParticle(w, i - k, j)->type == PTYPE_NONE) {
+                                    moveX = i - k;
                                 }
-                    else if (i < w->w - 1 &&
-                                World_getParticle(w, i + 1, j)->type == PTYPE_NONE) {
-                                World_swapParticle(w, i, j, i + 1, j);
+                            else {
+                                break;
+                            }
+                        }
+                        if (moveX != i) {
+                            World_swapParticle(w, i, j, i - 1, j);
+                            current->vel = START_VEL;
+                        }
+                    }
+                    else if (i < w->w - 1 && World_getParticle(w, i + 1, j)->type == PTYPE_NONE) {
+                        moveX = i;
+                        for (int k = 1; k <= current->spreadVel; k++) {
+                            if (i + k < w->w &&
+                                World_getParticle(w, i + k, j)->type == PTYPE_NONE) {
+                                    moveX = i + k;
                                 }
+                            else {
+                                break;
+                            }
+                        }
+                        if (moveX != i) {
+                            World_swapParticle(w, i, j, i + 1, j);
+                            current->vel = START_VEL;
+                        }
+                    }
+                    // NO MOVE
+                    else {
+                        current->vel = START_VEL;
+                        current->spreadVel = START_VEL;
+                    }
+
                 break;
                 case PTYPE_WOOD:
                 break;

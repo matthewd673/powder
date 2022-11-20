@@ -45,6 +45,7 @@ int main(int argc, char *argv[]) {
     int mX, mY;
     Uint32 mButtons;
 
+    int brushSize = 1;
     char newParticleType = 0x1;
 
     int loop = 1;
@@ -56,9 +57,11 @@ int main(int argc, char *argv[]) {
             }
             else if (e.type == SDL_KEYDOWN) {
                 switch (e.key.keysym.sym) {
+                    // exit
                     case SDLK_ESCAPE:
                         loop = 0;
                     break;
+                    // switch particle type
                     case SDLK_1:
                         newParticleType = PTYPE_SAND;
                     break;
@@ -68,10 +71,19 @@ int main(int argc, char *argv[]) {
                     case SDLK_3:
                         newParticleType = PTYPE_WOOD;
                     break;
+                    // switch brush size
+                    case SDLK_UP:
+                        brushSize++;
+                    break;
+                    case SDLK_DOWN:
+                        brushSize--;
+                        if (brushSize <= 0) {
+                            brushSize = 1;
+                        }
+                    break;
                 }
             }
         }
-
 
         // mouse state input
         mButtons = SDL_GetMouseState(&mX, &mY);
@@ -89,11 +101,18 @@ int main(int argc, char *argv[]) {
         }
 
         if ((mButtons & SDL_BUTTON_LEFT) != 0) {
-            Particle_setType(
-                World_getParticle(w, mX / PARTICLE_SCALE, mY / PARTICLE_SCALE),
-                newParticleType
-            );
-            // printf("draw %d %d\n", mX, mY);
+            for (int i = 0; i < brushSize; i++) {
+                for (int j = 0; j < brushSize; j++) {
+                    if (mX / PARTICLE_SCALE + i >= WORLD_WIDTH ||
+                        mY / PARTICLE_SCALE + j >= WORLD_HEIGHT) {
+                            continue;
+                        }
+                    Particle_setType(
+                        World_getParticle(w, mX / PARTICLE_SCALE + i, mY / PARTICLE_SCALE + j),
+                        newParticleType
+                    );
+                }
+            }
         }
 
         // update
