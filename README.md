@@ -11,8 +11,8 @@ gcc *.c -Iinclude -Llib -lmingw32 -lSDL2main -lSDL2 -o powder
 
 ## Game
 
-**Particle Types:** `SAND`, `WATER`, `WOOD`
+**Particle Types:** `SAND`, `WATER`, `WOOD`, `FIRE`
 
 Left mouse button: place particles
 
-Digit keys (1-3): change particle type
+Digit keys (1-4): change particle type

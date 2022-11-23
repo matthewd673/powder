@@ -8,8 +8,10 @@
 #define START_VEL       1.f
 #define MAX_VEL         9.8f
 #define SPREAD_ACC      .0157f
-#define START_SPREAD    0.f
-#define MAX_SPREAD      2.f
+#define START_SPREAD    1.f
+#define MAX_SPREAD      3.f
+
+#define LIFETIME_FIRE   24
 
 struct Particle {
     char type;
@@ -17,6 +19,7 @@ struct Particle {
     float vel;
     float spreadVel;
     char lastSpreadDir;
+    short lifetime;
 };
 
 struct World {
@@ -37,6 +40,7 @@ Particle new_Particle(char type) {
     this->vel = START_VEL;
     this->spreadVel = START_SPREAD;
     this->lastSpreadDir = 0;
+    this->lifetime = 0;
 
     return this;
 }
@@ -46,6 +50,15 @@ char Particle_getType(Particle p) {
 }
 void Particle_setType(Particle p, char type) {
     p->type = type;
+}
+
+void Particle_reset(Particle p) {
+    p->type = PTYPE_NONE;
+    p->ticked = 0;
+    p->vel = START_VEL;
+    p->spreadVel = START_SPREAD;
+    p->lastSpreadDir = 0;
+    p->lifetime = 0;
 }
 
 World new_World(short width, short height) {
@@ -184,6 +197,61 @@ int sim_spread(World w, Particle p, short x, short y) {
         return 0;
     }
 }
+
+int sim_burn(World w, Particle p, short x, short y) {
+    int spread = 0;
+    for (int i = x - 1; i <= x + 1; i++) {
+        for (int j = y - 1; j <= y + 1; j++) {
+
+            if (i < 0 || i >= w->w || j < 0 || j >= w->h) {
+                continue;
+            }
+
+            Particle neighbor = World_getParticle(w, i, j);
+
+            if (neighbor->type == PTYPE_WOOD) {
+                // wait to spread
+                if (p->lifetime < LIFETIME_FIRE / 2) {
+                    continue;
+                }
+                // random chance to spread
+                if (randFloat() > 0.5f) {
+                    continue;
+                }
+                neighbor->type = PTYPE_FIRE;
+                neighbor->lifetime = 0;
+                spread = 1;
+            }
+            else if (neighbor->type == PTYPE_NONE) {
+                if (randFloat() > 0.2) {
+                    continue;
+                }
+                // only upwards
+                if (j >= y) {
+                    continue;
+                }
+                // sparky version
+                World_swapParticle(w, x, y, i, j);
+                // spready version
+                // if (p->lifetime < LIFETIME_FIRE/3) {
+                //     neighbor->type = PTYPE_FIRE;
+                //     neighbor->lifetime = p->lifetime * 3;
+                //     p->lifetime += LIFETIME_FIRE/2;
+                // }
+                // neighbor->lifetime = p->lifetime * 2;
+                // p->lifetime += 4;
+            }
+        }
+    }
+
+    if (spread) {
+        p->lifetime = 0;
+    }
+
+    return 1;
+    // Particle_reset(p);
+}
+
 void World_simulate(World w) {
     // update
     Particle current;
@@ -211,6 +279,13 @@ void World_simulate(World w) {
                     }
                 break;
                 case PTYPE_WOOD:
+                break;
+                case PTYPE_FIRE:
+                    current->lifetime++;
+                    if (current->lifetime >= LIFETIME_FIRE) {
+                        Particle_reset(current);
+                    }
+                    sim_burn(w, current, i, j);
                 break;
             }
             current->ticked = 1;

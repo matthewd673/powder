@@ -71,6 +71,9 @@ int main(int argc, char *argv[]) {
                     case SDLK_3:
                         newParticleType = PTYPE_WOOD;
                     break;
+                    case SDLK_4:
+                        newParticleType = PTYPE_FIRE;
+                    break;
                     // switch brush size
                     case SDLK_UP:
                         brushSize++;
@@ -107,10 +110,12 @@ int main(int argc, char *argv[]) {
                         mY / PARTICLE_SCALE + j >= WORLD_HEIGHT) {
                             continue;
                         }
-                    Particle_setType(
-                        World_getParticle(w, mX / PARTICLE_SCALE + i, mY / PARTICLE_SCALE + j),
-                        newParticleType
-                    );
+                    if (Particle_getType(World_getParticle(w, mX / PARTICLE_SCALE + i, mY / PARTICLE_SCALE + j)) == PTYPE_NONE) {
+                        Particle_setType(
+                            World_getParticle(w, mX / PARTICLE_SCALE + i, mY / PARTICLE_SCALE + j),
+                            newParticleType
+                        );
+                    }
                 }
             }
         }
@@ -135,6 +140,9 @@ int main(int argc, char *argv[]) {
                     case PTYPE_WOOD:
                         col = 0x94493aff;
                         break;
+                    case PTYPE_FIRE:
+                        col = 0xde5d3aff;
+                        break;
                 }
 
                 for (int k = 0; k < PARTICLE_SCALE; k++) {
@@ -144,8 +152,6 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
-
-        // printf("done draw\n");
 
         SDL_BlitSurface(gCanvas, NULL, gScreenSurface, NULL);
         SDL_UpdateWindowSurface(gWindow);

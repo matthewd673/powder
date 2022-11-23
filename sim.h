@@ -2,6 +2,8 @@
 #define PTYPE_SAND  0x1
 #define PTYPE_WATER 0x2
 #define PTYPE_WOOD  0x3
+#define PTYPE_FIRE  0x4
+#define PTYPE_SMOKE 0x5
 
 typedef struct Particle *Particle;
 typedef struct World *World;
