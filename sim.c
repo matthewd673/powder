@@ -199,7 +199,7 @@ int sim_spread(World w, Particle p, short x, short y) {
 }
 
 int sim_burn(World w, Particle p, short x, short y) {
-    int spread = 0;
+    char spread = 0;
     for (int i = x - 1; i <= x + 1; i++) {
         for (int j = y - 1; j <= y + 1; j++) {
 
@@ -214,22 +214,33 @@ int sim_burn(World w, Particle p, short x, short y) {
                 if (p->lifetime < LIFETIME_FIRE / 2) {
                     continue;
                 }
-                // random chance to spread
+                // random chance to spread (50%)
                 if (randFloat() > 0.5f) {
                     continue;
                 }
                 neighbor->type = PTYPE_FIRE;
                 neighbor->lifetime = 0;
-                spread = 1;
+                spread = spread | 0x1;
             }
             else if (neighbor->type == PTYPE_NONE) {
-                if (randFloat() > 0.2) {
-                    continue;
-                }
                 // only upwards
                 if (j >= y) {
                     continue;
                 }
+
+                // 20% chance to spread
+                if (randFloat() > 0.2) {
+                    continue;
+                }
+                // else, 20% chance to make smoke
+                else if (randFloat() < 0.2) {
+                    Particle above = World_getParticle(w, i, j);
+                    above->lifetime = 0;
+                    above->type = PTYPE_SMOKE;
+                }
+
+                spread = spread | 0x2;
+
                 // sparky version
                 World_swapParticle(w, x, y, i, j);
                 // spready version
@@ -244,12 +255,35 @@ int sim_burn(World w, Particle p, short x, short y) {
         }
     }
 
-    if (spread) {
+    if (spread & 0x1) { // spread to wood
         p->lifetime = 0;
     }
 
     return 1;
     // Particle_reset(p);
+}
+
+int sim_spread_up(World w, Particle p, short x, short y) {
+    // attempt to go up
+    if (y > 0 && World_getParticle(w, x, y - 1)->type == PTYPE_NONE) {
+        World_swapParticle(w, x, y, x, y - 1);
+        return 1;
+    }
+    // if already at top, "keep floating up" (clear smoke)
+    else if (y == 0) {
+        Particle_reset(p);
+    }
+    // try to spread
+    else if (x > 0 && World_getParticle(w, x - 1, y)->type == PTYPE_NONE) {
+        World_swapParticle(w, x, y, x - 1, y);
+        return 1;
+    }
+    else if (x < w->w - 1 && World_getParticle(w, x + 1, y)->type == PTYPE_NONE) {
+        World_swapParticle(w, x, y, x + 1, y);
+        return 1;
+    }
+
+    return 0;
 }
 
 void World_simulate(World w) {
@@ -286,6 +320,9 @@ void World_simulate(World w) {
                         Particle_reset(current);
                     }
                     sim_burn(w, current, i, j);
+                break;
+                case PTYPE_SMOKE:
+                    sim_spread_up(w, current, i, j);
                 break;
             }
             current->ticked = 1;

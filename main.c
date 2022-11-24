@@ -143,6 +143,9 @@ int main(int argc, char *argv[]) {
                     case PTYPE_FIRE:
                         col = 0xde5d3aff;
                         break;
+                    case PTYPE_SMOKE:
+                        col = 0x2c1e31ff;
+                        break;
                 }
 
                 for (int k = 0; k < PARTICLE_SCALE; k++) {
