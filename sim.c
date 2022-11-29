@@ -269,8 +269,9 @@ int sim_spread_up(World w, Particle p, short x, short y) {
         World_swapParticle(w, x, y, x, y - 1);
         return 1;
     }
+    
     // if already at top, "keep floating up" (clear smoke)
-    else if (y == 0) {
+    if (y == 0) {
         Particle_reset(p);
     }
     // try to spread

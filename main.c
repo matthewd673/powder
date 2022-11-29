@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 
 #include "sim.h"
 
@@ -12,11 +13,9 @@
 #define PARTICLE_SCALE 4
 
 SDL_Window *gWindow = NULL;
-SDL_Surface *gScreenSurface = NULL;
-SDL_Surface *gCanvas = NULL;
+SDL_Renderer *gRenderer = NULL;
 
 int InitWindow();
-int CreateSurface();
 void Quit();
 
 void SetPixel(SDL_Surface *surface, int x, int y, Uint32 color) {
@@ -34,10 +33,34 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    if (!CreateSurface()) {
-        printf("Failed to create surface\n");
+    // create texture
+    SDL_Texture *texture = SDL_CreateTexture(gRenderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, WINDOW_WIDTH, WINDOW_HEIGHT);
+    if (texture == NULL) {
+        printf("Failed to create texture: %s\n", SDL_GetError());
         return 1;
     }
+
+    // Uint32 pixels[WINDOW_WIDTH * WINDOW_HEIGHT];
+    Uint32 *pixels = (Uint32 *)calloc(WINDOW_WIDTH * WINDOW_HEIGHT, sizeof(Uint32));
+    if (pixels == NULL) {
+        printf("Failed to create pixel array\n");
+    }
+
+    // create font
+    if (TTF_Init() < 0) {
+        printf("Failed to initialize SDL_ttf: %s\n", TTF_GetError());
+    }
+    TTF_Font *font = TTF_OpenFont("arial.ttf", 12);
+    if (font == NULL) {
+        printf("Failed to load font: %s\n", TTF_GetError());
+    }
+    SDL_Color textColor = {255, 255, 255};
+    SDL_Surface *textSurface = TTF_RenderText_Solid(font, "powder", textColor);
+    SDL_Texture *textTexture = SDL_CreateTextureFromSurface(gRenderer, textSurface);
+    SDL_Rect textRect;
+    textRect.x = 10;
+    textRect.y = 10;
+    TTF_SizeText(font, "powder", &textRect.w, &textRect.h);
 
     World w = new_World(WORLD_WIDTH, WORLD_HEIGHT);
 
@@ -124,41 +147,54 @@ int main(int argc, char *argv[]) {
         World_simulate(w);
 
         // render
-        SDL_FillRect(gScreenSurface, NULL, 0x0);
-        SDL_FillRect(gCanvas, NULL, 0x0);
+        if (SDL_UpdateTexture(texture, NULL, pixels, WINDOW_WIDTH * sizeof(Uint32)) < 0) {
+            printf("Failed to update texture: %s\n", SDL_GetError());
+        }
 
         for (short i = 0; i < WORLD_WIDTH; i++) {
             for (short j = 0; j < WORLD_HEIGHT; j++) {
                 Uint32 col = 0x0;
                 switch (Particle_getType(World_getParticle(w, i, j))) {
                     case PTYPE_SAND:
-                        col = 0xdab163ff;
+                        col = 0xffdab163;
                         break;
                     case PTYPE_WATER:
-                        col = 0x3388deff;
+                        col = 0xff3388de;
                         break;
                     case PTYPE_WOOD:
-                        col = 0x94493aff;
+                        col = 0xff94493a;
                         break;
                     case PTYPE_FIRE:
-                        col = 0xde5d3aff;
+                        col = 0xffde5d3a;
                         break;
                     case PTYPE_SMOKE:
-                        col = 0x2c1e31ff;
+                        col = 0xff2c1e31;
                         break;
                 }
 
                 for (int k = 0; k < PARTICLE_SCALE; k++) {
                     for (int l = 0; l < PARTICLE_SCALE; l++) {
-                        SetPixel(gCanvas, i*PARTICLE_SCALE + k, j*PARTICLE_SCALE + l, col);
+                        // SetPixel(gCanvas, i*PARTICLE_SCALE + k, j*PARTICLE_SCALE + l, col);
+                        pixels[((j * PARTICLE_SCALE + l) * WINDOW_WIDTH) + (i * PARTICLE_SCALE + k)] = col;
                     }
                 }
             }
         }
 
-        SDL_BlitSurface(gCanvas, NULL, gScreenSurface, NULL);
-        SDL_UpdateWindowSurface(gWindow);
+        SDL_RenderClear(gRenderer);
+        SDL_RenderCopy(gRenderer, texture, NULL, NULL);
+        SDL_RenderCopy(gRenderer, textTexture, NULL, &textRect);
+        SDL_RenderPresent(gRenderer);
     }
+
+    // clean up texture
+    SDL_DestroyTexture(texture);
+    free(pixels);
+
+    // clean up font
+    SDL_FreeSurface(textSurface);
+    SDL_DestroyTexture(textTexture);
+    TTF_CloseFont(font);
 
     free_World(w);
 }
@@ -169,6 +205,7 @@ int InitWindow() {
         return 0;
     }
 
+    // create window
     gWindow = SDL_CreateWindow(
         "powder",
         SDL_WINDOWPOS_CENTERED,
@@ -183,29 +220,17 @@ int InitWindow() {
         return 0;
     }
 
-    gScreenSurface = SDL_GetWindowSurface(gWindow);
+    // create renderer
+    gRenderer = SDL_CreateRenderer(gWindow, -1, SDL_RENDERER_ACCELERATED);
+    if (gRenderer == NULL) {
+        printf("Failed to create renderer: %s\n", SDL_GetError());
+        return 0;
+    }
     return 1;
 }
 
-int CreateSurface() {
-    gCanvas = SDL_CreateRGBSurface(
-        0,
-        WINDOW_WIDTH,
-        WINDOW_HEIGHT,
-        32,
-        0xff000000,
-        0x00ff0000,
-        0x0000ff00,
-        0x000000ff
-    );
-
-    return gCanvas != NULL;
-}
-
 void Quit() {
-    SDL_FreeSurface(gCanvas);
-    gCanvas = NULL;
-
+    SDL_DestroyRenderer(gRenderer);
     SDL_DestroyWindow(gWindow);
     gWindow = NULL;
 
