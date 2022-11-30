@@ -7,10 +7,10 @@
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 800
 
-#define WORLD_WIDTH 200
-#define WORLD_HEIGHT 200
+#define WORLD_WIDTH 400
+#define WORLD_HEIGHT 400
 
-#define PARTICLE_SCALE 4
+#define PARTICLE_SCALE 2
 
 SDL_Window *gWindow = NULL;
 SDL_Renderer *gRenderer = NULL;
@@ -72,7 +72,17 @@ int main(int argc, char *argv[]) {
     char newParticleType = 0x1;
 
     int loop = 1;
+    Uint64 now_time = SDL_GetPerformanceCounter();
+    Uint64 last_time = 0;
+    double delta_time = 0;
+    char time_string[6];
+
     while (loop) {
+        last_time = now_time;
+        now_time = SDL_GetPerformanceCounter();
+        delta_time = (double)((now_time - last_time)*1000 / (double)SDL_GetPerformanceFrequency());
+        SDL_SetWindowTitle(gWindow, gcvt(delta_time, 5, time_string));
+
         // event loop
         while (SDL_PollEvent(&e) != 0) {
             if (e.type == SDL_QUIT) {
