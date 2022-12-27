@@ -7,10 +7,10 @@
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 800
 
-#define WORLD_WIDTH 400
-#define WORLD_HEIGHT 400
+#define WORLD_WIDTH 200
+#define WORLD_HEIGHT 200
 
-#define PARTICLE_SCALE 2
+#define PARTICLE_SCALE 4
 
 SDL_Window *gWindow = NULL;
 SDL_Renderer *gRenderer = NULL;
