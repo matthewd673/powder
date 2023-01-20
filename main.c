@@ -7,10 +7,10 @@
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 800
 
-#define WORLD_WIDTH 200
-#define WORLD_HEIGHT 200
+#define WORLD_WIDTH 800
+#define WORLD_HEIGHT 800
 
-#define PARTICLE_SCALE 4
+#define PARTICLE_SCALE 1
 
 SDL_Window *gWindow = NULL;
 SDL_Renderer *gRenderer = NULL;
@@ -139,15 +139,21 @@ int main(int argc, char *argv[]) {
         if ((mButtons & SDL_BUTTON_LEFT) != 0) {
             for (int i = 0; i < brushSize; i++) {
                 for (int j = 0; j < brushSize; j++) {
-                    if (mX / PARTICLE_SCALE + i >= WORLD_WIDTH ||
-                        mY / PARTICLE_SCALE + j >= WORLD_HEIGHT) {
+                    int pX = mX / PARTICLE_SCALE + i;
+                    int pY = mY / PARTICLE_SCALE + j;
+
+                    if (pX >= WORLD_WIDTH ||
+                        pY >= WORLD_HEIGHT) {
                             continue;
                         }
-                    if (Particle_getType(World_getParticle(w, mX / PARTICLE_SCALE + i, mY / PARTICLE_SCALE + j)) == PTYPE_NONE) {
+
+                    Particle existing = World_getParticle(w, pX, pY);
+                    if (Particle_getType(existing) == PTYPE_NONE) {
                         Particle_setType(
-                            World_getParticle(w, mX / PARTICLE_SCALE + i, mY / PARTICLE_SCALE + j),
+                            existing,
                             newParticleType
                         );
+                        World_setParticle(w, pX, pY, existing); // trigger cell activation
                     }
                 }
             }

@@ -1,7 +1,10 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 #include "sim.h"
 #include "math.h"
+
+#define CELL_SIZE       10.f
 
 // rough approximation
 #define GRAVITY_ACC     .1568f
@@ -26,6 +29,10 @@ struct World {
     Particle *p;
     short w;
     short h;
+
+    short *c;
+    short cw;
+    short ch;
 };
 
 Particle new_Particle(char type) {
@@ -83,22 +90,54 @@ World new_World(short width, short height) {
     printf("done world init\n");
     this->p = grid;
 
+    // generate cells
+    this->cw = (int)ceil(width / CELL_SIZE);
+    this->ch = (int)ceil(height / CELL_SIZE);
+    printf("world cells: %dx%d\n", this->cw, this->ch);
+
+    this->c = (short *)malloc(this->cw * this->ch * sizeof(short));
+    for (int i = 0; i < this->cw * this->ch; i++) {
+        this->c[i] = 1; // default all cells to on
+    }
+
+    printf("done world cell init\n");
+
     return this;
 }
 
 void free_World(World w) {
     free(w->p);
+    free(w->c);
     free(w);
 }
 
+void World_activateCell(World w, short x, short y) {
+    short cx = (short)floor(x / CELL_SIZE);
+    short cy = (short)floor(y / CELL_SIZE);
+
+    w->c[cy * w->cw + cx] = 2; // starts at 2
+}
+
+short World_getCellStatus(World w, short x, short y) {
+    short cx = (short)floor(x / CELL_SIZE);
+    short cy = (short)floor(y / CELL_SIZE);
+
+    return w->c[cy * w->cw + cx];
+}
+
 Particle World_getParticle(World w, short x, short y) {
-    // printf("try get on %d %d = %d\n", x, y, y * x + x);
+    // World_activateCell(w, x, y);
     return w->p[y * w->w + x];
 }
 void World_setParticle(World w, short x, short y, Particle p) {
+    World_activateCell(w, x, y);
+
     w->p[y * w->w + x] = p;
 }
 void World_swapParticle(World w, short x1, short y1, short x2, short y2) {
+    World_activateCell(w, x1, y1);
+    World_activateCell(w, x2, y2);
+
     Particle temp = w->p[y1 * w->w + x1];
     w->p[y1 * w->w + x1] = w->p[y2 * w->w + x2];
     w->p[y2 * w->w + x2] = temp;
@@ -108,7 +147,7 @@ int sim_pile(World w, Particle p, short x, short y) {
     if (y == w->h - 1) {
         return 0;
     }
-    
+
     int moveY = y;
     for (int k = 1; k <= p->vel; k++) {
         if (y + k < w->h &&
@@ -269,7 +308,7 @@ int sim_spread_up(World w, Particle p, short x, short y) {
         World_swapParticle(w, x, y, x, y - 1);
         return 1;
     }
-    
+
     // if already at top, "keep floating up" (clear smoke)
     if (y == 0) {
         Particle_reset(p);
@@ -290,43 +329,102 @@ int sim_spread_up(World w, Particle p, short x, short y) {
 void World_simulate(World w) {
     // update
     Particle current;
-    for (short i = 0; i < w->w; i++) {
-        for (short j = 0; j < w->h; j++) {
-            current = World_getParticle(w, i, j);
-            
-            if (current->ticked) {
-                current->ticked = 0;
+
+    // loop through every cell
+    short activeCt = 0;
+    for (short ci = 0; ci < w->cw; ci++) {
+        for (short cj = 0; cj < w->ch; cj++) {
+            short active = w->c[cj * w->ch + ci];
+            if (!active) {
                 continue;
             }
 
-            switch (current->type) {
-                case PTYPE_SAND:
-                    // skip sand at bottom of screen
-                    if (j == w->h - 1) {
-                        break;
+            activeCt++;
+            // deactivate cell
+            // cells have 2 chances to stay active before they're turned off
+            // (so that particles falling into a cell and activating it don't get stuck)
+            w->c[cj * w->ch + ci]--;
+
+            // simulate particles within cell
+            for (short i = ci * CELL_SIZE; i < (ci + 1) * CELL_SIZE; i++) {
+                for (short j = cj * CELL_SIZE; j < (cj + 1) * CELL_SIZE; j++) {
+                    current = World_getParticle(w, i, j);
+
+                    if (current->ticked) {
+                        current->ticked = 0;
+                        continue;
                     }
 
-                    sim_pile(w, current, i, j);
-                break;
-                case PTYPE_WATER:
-                    if (!sim_pile(w, current, i, j)) {
-                        sim_spread(w, current, i, j);
+                    switch (current->type) {
+                        case PTYPE_SAND:
+                            // skip sand at bottom of screen
+                            if (j == w->h - 1) {
+                                break;
+                            }
+
+                            sim_pile(w, current, i, j);
+                        break;
+                        case PTYPE_WATER:
+                            if (!sim_pile(w, current, i, j)) {
+                                sim_spread(w, current, i, j);
+                            }
+                        break;
+                        case PTYPE_WOOD:
+                        break;
+                        case PTYPE_FIRE:
+                            current->lifetime++;
+                            if (current->lifetime >= LIFETIME_FIRE) {
+                                Particle_reset(current);
+                            }
+                            sim_burn(w, current, i, j);
+                        break;
+                        case PTYPE_SMOKE:
+                            sim_spread_up(w, current, i, j);
+                        break;
                     }
-                break;
-                case PTYPE_WOOD:
-                break;
-                case PTYPE_FIRE:
-                    current->lifetime++;
-                    if (current->lifetime >= LIFETIME_FIRE) {
-                        Particle_reset(current);
-                    }
-                    sim_burn(w, current, i, j);
-                break;
-                case PTYPE_SMOKE:
-                    sim_spread_up(w, current, i, j);
-                break;
+                    current->ticked = 1;
+                }
             }
-            current->ticked = 1;
         }
     }
+
+    // for (short i = 0; i < w->w; i++) {
+    //     for (short j = 0; j < w->h; j++) {
+    //         current = World_getParticle(w, i, j);
+
+    //         if (current->ticked) {
+    //             current->ticked = 0;
+    //             continue;
+    //         }
+
+    //         switch (current->type) {
+    //             case PTYPE_SAND:
+    //                 // skip sand at bottom of screen
+    //                 if (j == w->h - 1) {
+    //                     break;
+    //                 }
+
+    //                 sim_pile(w, current, i, j);
+    //             break;
+    //             case PTYPE_WATER:
+    //                 if (!sim_pile(w, current, i, j)) {
+    //                     sim_spread(w, current, i, j);
+    //                 }
+    //             break;
+    //             case PTYPE_WOOD:
+    //             break;
+    //             case PTYPE_FIRE:
+    //                 current->lifetime++;
+    //                 if (current->lifetime >= LIFETIME_FIRE) {
+    //                     Particle_reset(current);
+    //                 }
+    //                 sim_burn(w, current, i, j);
+    //             break;
+    //             case PTYPE_SMOKE:
+    //                 sim_spread_up(w, current, i, j);
+    //             break;
+    //         }
+    //         current->ticked = 1;
+    //     }
+    // }
 }
