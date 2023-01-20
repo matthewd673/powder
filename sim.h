@@ -1,3 +1,5 @@
+#define CELL_SIZE   10.f
+
 #define PTYPE_NONE  0x0
 #define PTYPE_SAND  0x1
 #define PTYPE_WATER 0x2
@@ -17,6 +19,10 @@ World new_World(short width, short height);
 void free_World(World w);
 
 Particle World_getParticle(World w, short x, short y);
+short World_getCellWidth(World w);
+short World_getCellHeight(World w);
+short World_getCellStatusExact(World w, short cx, short cy);
+
 void World_setParticle(World w, short x, short y, Particle p);
 void World_swapParticle(World w, short x1, short y1, short x2, short y2);
 

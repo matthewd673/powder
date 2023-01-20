@@ -4,8 +4,6 @@
 #include "sim.h"
 #include "math.h"
 
-#define CELL_SIZE       10.f
-
 // rough approximation
 #define GRAVITY_ACC     .1568f
 #define START_VEL       1.f
@@ -111,6 +109,14 @@ void free_World(World w) {
     free(w);
 }
 
+short World_getCellWidth(World w) {
+    return w->cw;
+}
+
+short World_getCellHeight(World w) {
+    return w->ch;
+}
+
 void World_activateCell(World w, short x, short y) {
     short cx = (short)floor(x / CELL_SIZE);
     short cy = (short)floor(y / CELL_SIZE);
@@ -125,8 +131,11 @@ short World_getCellStatus(World w, short x, short y) {
     return w->c[cy * w->cw + cx];
 }
 
+short World_getCellStatusExact(World w, short cx, short cy) {
+    return w->c[cy * w->cw + cx];
+}
+
 Particle World_getParticle(World w, short x, short y) {
-    // World_activateCell(w, x, y);
     return w->p[y * w->w + x];
 }
 void World_setParticle(World w, short x, short y, Particle p) {

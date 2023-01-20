@@ -167,35 +167,72 @@ int main(int argc, char *argv[]) {
             printf("Failed to update texture: %s\n", SDL_GetError());
         }
 
-        for (short i = 0; i < WORLD_WIDTH; i++) {
-            for (short j = 0; j < WORLD_HEIGHT; j++) {
-                Uint32 col = 0x0;
-                switch (Particle_getType(World_getParticle(w, i, j))) {
-                    case PTYPE_SAND:
-                        col = 0xffdab163;
-                        break;
-                    case PTYPE_WATER:
-                        col = 0xff3388de;
-                        break;
-                    case PTYPE_WOOD:
-                        col = 0xff94493a;
-                        break;
-                    case PTYPE_FIRE:
-                        col = 0xffde5d3a;
-                        break;
-                    case PTYPE_SMOKE:
-                        col = 0xff2c1e31;
-                        break;
+        // loop through every cell
+        for (short ci = 0; ci < World_getCellWidth(w); ci++) {
+            for (short cj = 0; cj < World_getCellHeight(w); cj++) {
+                if (!World_getCellStatusExact(w, ci, cj)) {
+                    continue;
                 }
 
-                for (int k = 0; k < PARTICLE_SCALE; k++) {
-                    for (int l = 0; l < PARTICLE_SCALE; l++) {
-                        // SetPixel(gCanvas, i*PARTICLE_SCALE + k, j*PARTICLE_SCALE + l, col);
-                        pixels[((j * PARTICLE_SCALE + l) * WINDOW_WIDTH) + (i * PARTICLE_SCALE + k)] = col;
+                for (short i = ci * CELL_SIZE; i < (ci + 1) * CELL_SIZE; i++) {
+                    for (short j = cj * CELL_SIZE; j < (cj + 1) * CELL_SIZE; j++) {
+                        Uint32 col = 0x0;
+                        switch (Particle_getType(World_getParticle(w, i, j))) {
+                            case PTYPE_SAND:
+                                col = 0xffdab163;
+                                break;
+                            case PTYPE_WATER:
+                                col = 0xff3388de;
+                                break;
+                            case PTYPE_WOOD:
+                                col = 0xff94493a;
+                                break;
+                            case PTYPE_FIRE:
+                                col = 0xffde5d3a;
+                                break;
+                            case PTYPE_SMOKE:
+                                col = 0xff2c1e31;
+                                break;
+                        }
+
+                        for (int k = 0; k < PARTICLE_SCALE; k++) {
+                            for (int l = 0; l < PARTICLE_SCALE; l++) {
+                                pixels[((j * PARTICLE_SCALE + l) * WINDOW_WIDTH) + (i * PARTICLE_SCALE + k)] = col;
+                            }
+                        }
                     }
                 }
             }
         }
+
+        // for (short i = 0; i < WORLD_WIDTH; i++) {
+        //     for (short j = 0; j < WORLD_HEIGHT; j++) {
+        //         Uint32 col = 0x0;
+        //         switch (Particle_getType(World_getParticle(w, i, j))) {
+        //             case PTYPE_SAND:
+        //                 col = 0xffdab163;
+        //                 break;
+        //             case PTYPE_WATER:
+        //                 col = 0xff3388de;
+        //                 break;
+        //             case PTYPE_WOOD:
+        //                 col = 0xff94493a;
+        //                 break;
+        //             case PTYPE_FIRE:
+        //                 col = 0xffde5d3a;
+        //                 break;
+        //             case PTYPE_SMOKE:
+        //                 col = 0xff2c1e31;
+        //                 break;
+        //         }
+
+        //         for (int k = 0; k < PARTICLE_SCALE; k++) {
+        //             for (int l = 0; l < PARTICLE_SCALE; l++) {
+        //                 pixels[((j * PARTICLE_SCALE + l) * WINDOW_WIDTH) + (i * PARTICLE_SCALE + k)] = col;
+        //             }
+        //         }
+        //     }
+        // }
 
         SDL_RenderClear(gRenderer);
         SDL_RenderCopy(gRenderer, texture, NULL, NULL);
