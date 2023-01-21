@@ -91,7 +91,7 @@ World new_World(short width, short height) {
     // generate cells
     this->cw = (int)ceil(width / CELL_SIZE);
     this->ch = (int)ceil(height / CELL_SIZE);
-    printf("world cells: %dx%d\n", this->cw, this->ch);
+    printf("world cells: %dx%d (%d)\n", this->cw, this->ch, this->cw * this->ch);
 
     this->c = (short *)malloc(this->cw * this->ch * sizeof(short));
     for (int i = 0; i < this->cw * this->ch; i++) {
@@ -121,7 +121,14 @@ void World_activateCell(World w, short x, short y) {
     short cx = (short)floor(x / CELL_SIZE);
     short cy = (short)floor(y / CELL_SIZE);
 
-    w->c[cy * w->cw + cx] = 2; // starts at 2
+    short i = cy * w->cw + cx;
+    w->c[i] = 2; // 2 chances to stay active
+
+    // activate surrounding cells (no diagonals)
+    if (cx > 0) w->c[i - 1] = 2;
+    if (cx < w->cw - 1) w->c[i + 1] = 2;
+    if (cy > 0) w->c[i - w->cw] = 2;
+    if (cy < w->ch - 1) w->c[i + w->cw] = 2;
 }
 
 short World_getCellStatus(World w, short x, short y) {
@@ -341,14 +348,17 @@ void World_simulate(World w) {
 
     // loop through every cell
     short activeCt = 0;
+    short active = 0;
     for (short ci = 0; ci < w->cw; ci++) {
         for (short cj = 0; cj < w->ch; cj++) {
-            short active = w->c[cj * w->ch + ci];
+            active = w->c[cj * w->ch + ci];
+
             if (!active) {
                 continue;
             }
 
             activeCt++;
+
             // deactivate cell
             // cells have 2 chances to stay active before they're turned off
             // (so that particles falling into a cell and activating it don't get stuck)
@@ -381,6 +391,7 @@ void World_simulate(World w) {
                         case PTYPE_WOOD:
                         break;
                         case PTYPE_FIRE:
+                            World_activateCell(w, i, j);
                             current->lifetime++;
                             if (current->lifetime >= LIFETIME_FIRE) {
                                 Particle_reset(current);
@@ -396,44 +407,4 @@ void World_simulate(World w) {
             }
         }
     }
-
-    // for (short i = 0; i < w->w; i++) {
-    //     for (short j = 0; j < w->h; j++) {
-    //         current = World_getParticle(w, i, j);
-
-    //         if (current->ticked) {
-    //             current->ticked = 0;
-    //             continue;
-    //         }
-
-    //         switch (current->type) {
-    //             case PTYPE_SAND:
-    //                 // skip sand at bottom of screen
-    //                 if (j == w->h - 1) {
-    //                     break;
-    //                 }
-
-    //                 sim_pile(w, current, i, j);
-    //             break;
-    //             case PTYPE_WATER:
-    //                 if (!sim_pile(w, current, i, j)) {
-    //                     sim_spread(w, current, i, j);
-    //                 }
-    //             break;
-    //             case PTYPE_WOOD:
-    //             break;
-    //             case PTYPE_FIRE:
-    //                 current->lifetime++;
-    //                 if (current->lifetime >= LIFETIME_FIRE) {
-    //                     Particle_reset(current);
-    //                 }
-    //                 sim_burn(w, current, i, j);
-    //             break;
-    //             case PTYPE_SMOKE:
-    //                 sim_spread_up(w, current, i, j);
-    //             break;
-    //         }
-    //         current->ticked = 1;
-    //     }
-    // }
 }

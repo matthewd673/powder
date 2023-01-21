@@ -4,13 +4,13 @@
 
 #include "sim.h"
 
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 800
+#define WINDOW_WIDTH    800
+#define WINDOW_HEIGHT   800
 
-#define WORLD_WIDTH 800
-#define WORLD_HEIGHT 800
+#define WORLD_WIDTH     800
+#define WORLD_HEIGHT    800
 
-#define PARTICLE_SCALE 1
+#define PARTICLE_SCALE  1
 
 SDL_Window *gWindow = NULL;
 SDL_Renderer *gRenderer = NULL;
@@ -195,44 +195,20 @@ int main(int argc, char *argv[]) {
                                 break;
                         }
 
-                        for (int k = 0; k < PARTICLE_SCALE; k++) {
-                            for (int l = 0; l < PARTICLE_SCALE; l++) {
-                                pixels[((j * PARTICLE_SCALE + l) * WINDOW_WIDTH) + (i * PARTICLE_SCALE + k)] = col;
+                        if (PARTICLE_SCALE > 1) {
+                            for (int k = 0; k < PARTICLE_SCALE; k++) {
+                                for (int l = 0; l < PARTICLE_SCALE; l++) {
+                                    pixels[((j * PARTICLE_SCALE + l) * WINDOW_WIDTH) + (i * PARTICLE_SCALE + k)] = col;
+                                }
                             }
+                        }
+                        else {
+                            pixels[((j * PARTICLE_SCALE) * WINDOW_WIDTH) + (i * PARTICLE_SCALE)] = col;
                         }
                     }
                 }
             }
         }
-
-        // for (short i = 0; i < WORLD_WIDTH; i++) {
-        //     for (short j = 0; j < WORLD_HEIGHT; j++) {
-        //         Uint32 col = 0x0;
-        //         switch (Particle_getType(World_getParticle(w, i, j))) {
-        //             case PTYPE_SAND:
-        //                 col = 0xffdab163;
-        //                 break;
-        //             case PTYPE_WATER:
-        //                 col = 0xff3388de;
-        //                 break;
-        //             case PTYPE_WOOD:
-        //                 col = 0xff94493a;
-        //                 break;
-        //             case PTYPE_FIRE:
-        //                 col = 0xffde5d3a;
-        //                 break;
-        //             case PTYPE_SMOKE:
-        //                 col = 0xff2c1e31;
-        //                 break;
-        //         }
-
-        //         for (int k = 0; k < PARTICLE_SCALE; k++) {
-        //             for (int l = 0; l < PARTICLE_SCALE; l++) {
-        //                 pixels[((j * PARTICLE_SCALE + l) * WINDOW_WIDTH) + (i * PARTICLE_SCALE + k)] = col;
-        //             }
-        //         }
-        //     }
-        // }
 
         SDL_RenderClear(gRenderer);
         SDL_RenderCopy(gRenderer, texture, NULL, NULL);
