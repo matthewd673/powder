@@ -2,18 +2,13 @@
 
 ## Requirements
 `powder` requires
-- [SDL2](https://github.com/libsdl-org/SDL/releases/tag/release-2.24.2)
-- [SDL_ttf](https://github.com/libsdl-org/SDL_ttf/releases)
-
-You'll need to copy the `lib` and `include` directories into the project directory, as well as any DLLs.
-
-Additionally, you'll need a copy of Arial (or any TTF named "arial.ttf", I suppose) in the root directory of the project.
+- [raylib](https://www.raylib.com/index.html)
 
 ## Build & Run
 
-To build and run (on mingw):
+To build and run:
 ```
-gcc *.c -Iinclude -Llib -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf -o powder
+cc *.c `pkg-config --libs --cflags raylib` -o powder
 ./powder
 ```
 
