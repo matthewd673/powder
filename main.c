@@ -6,6 +6,7 @@
 
 #define WINDOW_WIDTH    800
 #define WINDOW_HEIGHT   800
+#define WINDOW_FPS      120
 
 #define WORLD_WIDTH     400
 #define WORLD_HEIGHT    400
@@ -14,7 +15,7 @@
 
 int main(int argc, char *argv[]) {
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "powder");
-    SetTargetFPS(60);
+    SetTargetFPS(WINDOW_FPS);
 
     World w = new_World(WORLD_WIDTH, WORLD_HEIGHT);
 
@@ -132,7 +133,26 @@ int main(int argc, char *argv[]) {
                                 col.g = 0;
                                 col.b = 0;
                                 break;
+                          }
+
+                        // TEMP: debugging water flow
+                        /*
+                        if (Particle_getType(World_getParticle(w, i, j)) == PTYPE_WATER) {
+                          switch (Particle_getLastSpreadDir(World_getParticle(w, i, j)))
+                          {
+                            case SPREAD_LEFT:
+                              col.r = 255;
+                              col.g = 0;
+                              col.b = 0;
+                              break;
+                            case SPREAD_RIGHT:
+                              col.r = 0;
+                              col.g = 0;
+                              col.b = 255;
+                              break;
+                          }
                         }
+                        */
 
                         DrawRectangle(i * PARTICLE_SCALE, j * PARTICLE_SCALE,
                                       PARTICLE_SCALE, PARTICLE_SCALE,

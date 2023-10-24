@@ -7,6 +7,9 @@
 #define PTYPE_FIRE  0x4
 #define PTYPE_SMOKE 0x5
 
+#define SPREAD_LEFT   -1
+#define SPREAD_RIGHT  1
+
 typedef struct Particle *Particle;
 typedef struct World *World;
 
@@ -14,6 +17,7 @@ Particle new_Particle(char type);
 
 char Particle_getType(Particle p);
 void Particle_setType(Particle p, char type);
+char Particle_getLastSpreadDir(Particle p);
 
 World new_World(short width, short height);
 void free_World(World w);

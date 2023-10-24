@@ -4,3 +4,5 @@ lib
 SDL2.dll
 *.exe
 *.ttf
+powder
+*.swp

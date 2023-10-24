@@ -8,7 +8,7 @@
 #define GRAVITY_ACC     .1568f
 #define START_VEL       1.f
 #define MAX_VEL         9.8f
-#define SPREAD_ACC      .0157f
+#define SPREAD_ACC      .157f // formerly .0157 but this fixes right spread
 #define START_SPREAD    1.f
 #define MAX_SPREAD      3.f
 
@@ -44,7 +44,7 @@ Particle new_Particle(char type) {
     this->ticked = 0;
     this->vel = START_VEL;
     this->spreadVel = START_SPREAD;
-    this->lastSpreadDir = 0;
+    this->lastSpreadDir = randBoolean() ? SPREAD_LEFT : SPREAD_RIGHT;
     this->lifetime = 0;
 
     return this;
@@ -57,12 +57,16 @@ void Particle_setType(Particle p, char type) {
     p->type = type;
 }
 
+char Particle_getLastSpreadDir(Particle p) {
+  return p->lastSpreadDir;
+}
+
 void Particle_reset(Particle p) {
     p->type = PTYPE_NONE;
     p->ticked = 0;
     p->vel = START_VEL;
     p->spreadVel = START_SPREAD;
-    p->lastSpreadDir = 0;
+    p->lastSpreadDir = SPREAD_LEFT;
     p->lifetime = 0;
 }
 
@@ -198,59 +202,58 @@ int sim_pile(World w, Particle p, short x, short y) {
 }
 
 int sim_spread(World w, Particle p, short x, short y) {
-    // MOVE INTO SPREAD
-    if ((x > 0 && World_getParticle(w, x - 1, y)->type == PTYPE_NONE) && (p->lastSpreadDir == 0 ||
-        (p->lastSpreadDir == 1 && (x >= w->w - 1 || World_getParticle(w, x + 1, y)->type != PTYPE_NONE)))) {
-        int moveX = x;
-        for (int k = 1; k <= p->spreadVel; k++) {
-            if (x - k >= 0 &&
-                World_getParticle(w, x - k, y)->type == PTYPE_NONE) {
-                    moveX = x - k;
-                }
-            else {
-                break;
-            }
-        }
-        if (moveX != x) {
-            World_swapParticle(w, x, y, x - 1, y);
-            p->vel = START_VEL;
-            p->spreadVel = clamp(p->vel + SPREAD_ACC, -MAX_SPREAD, MAX_SPREAD);
-            p->lastSpreadDir = 0;
-            return 1;
-        }
-        else {
-            return 0;
-        }
+    // spread left if right is occupied
+    if (x >= w->w - 1 || // right is out of bounds
+        x < w->w - 1 && World_getParticle(w, x + 1, y)->type != PTYPE_NONE // right is occupied
+        ) {
+      p->lastSpreadDir = SPREAD_LEFT;
     }
-    else if ((x < w->w - 1 && World_getParticle(w, x + 1, y)->type == PTYPE_NONE) && (p->lastSpreadDir == 1 ||
-             (p->lastSpreadDir == 0 && (x <= 0 || World_getParticle(w, x - 1, y)->type != PTYPE_NONE)))) {
-        int moveX = x;
-        for (int k = 1; k <= p->spreadVel; k++) {
-            if (x + k < w->w &&
-                World_getParticle(w, x + k, y)->type == PTYPE_NONE) {
-                    moveX = x + k;
-                }
-            else {
-                break;
-            }
-        }
-        if (moveX != x) {
-            World_swapParticle(w, x, y, x + 1, y);
-            p->vel = START_VEL;
-            p->spreadVel = clamp(p->vel + SPREAD_ACC, -MAX_SPREAD, MAX_SPREAD);
-            p->lastSpreadDir = 1;
-            return 1;
-        }
-        else {
-            return 0;
-        }
+
+    // spread right if left is occupied
+    if (x <= 0 || // left is out of bounds
+        x > 0 && World_getParticle(w, x - 1, y)->type != PTYPE_NONE // left is occupied
+        ) {
+      p->lastSpreadDir = SPREAD_RIGHT;
     }
-    // NO MOVE
-    else {
-        p->vel = START_VEL;
-        p->spreadVel = START_VEL;
-        return 0;
+
+    // try to move in spread direction
+    int movex = x;
+    for (int k = 1; k <= p->spreadVel; k++) {
+      int try_pos = x + p->lastSpreadDir * k;
+
+      // moving left but that is out of bounds
+      if (p->lastSpreadDir == SPREAD_LEFT &&
+          try_pos <= 0) {
+        p->lastSpreadDir = SPREAD_RIGHT;
+        break;
+      }
+
+      // moving right but that is out of bounds
+      if (p->lastSpreadDir == SPREAD_RIGHT &&
+          try_pos >= w->w - 1) {
+        p->lastSpreadDir = SPREAD_LEFT;
+        break;
+      }
+
+      // update current move
+      if (World_getParticle(w, try_pos, y)->type == PTYPE_NONE) {
+        movex = try_pos;
+      }
     }
+
+    // found a move
+    if (movex != x)
+    {
+      World_swapParticle(w, x, y, movex, y);
+      p->vel = START_VEL;
+      p->spreadVel = clamp(p->spreadVel + SPREAD_ACC, 0, MAX_SPREAD);
+      return 1;
+    }
+
+    // no move
+    p->vel = START_VEL;
+    p->spreadVel = START_VEL;
+    return 0;
 }
 
 int sim_burn(World w, Particle p, short x, short y) {
@@ -295,17 +298,7 @@ int sim_burn(World w, Particle p, short x, short y) {
                 }
 
                 spread = spread | 0x2;
-
-                // sparky version
                 World_swapParticle(w, x, y, i, j);
-                // spready version
-                // if (p->lifetime < LIFETIME_FIRE/3) {
-                //     neighbor->type = PTYPE_FIRE;
-                //     neighbor->lifetime = p->lifetime * 3;
-                //     p->lifetime += LIFETIME_FIRE/2;
-                // }
-                // neighbor->lifetime = p->lifetime * 2;
-                // p->lifetime += 4;
             }
         }
     }
@@ -315,7 +308,6 @@ int sim_burn(World w, Particle p, short x, short y) {
     }
 
     return 1;
-    // Particle_reset(p);
 }
 
 int sim_spread_up(World w, Particle p, short x, short y) {
@@ -374,6 +366,7 @@ void World_simulate(World w) {
                         continue;
                     }
 
+                    // simulate each particle type appropriately
                     switch (current->type) {
                         case PTYPE_SAND:
                             // skip sand at bottom of screen
@@ -389,6 +382,7 @@ void World_simulate(World w) {
                             }
                         break;
                         case PTYPE_WOOD:
+                          // empty: wood does nothing
                         break;
                         case PTYPE_FIRE:
                             World_activateCell(w, i, j);
