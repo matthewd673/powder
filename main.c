@@ -13,6 +13,16 @@
 
 #define PARTICLE_SCALE  2
 
+// rendering color map
+struct Color color_map[] = {
+  { 0, 0, 0, 255 },       // PTYPE_NONE
+  { 247, 213, 134, 255 }, // PTYPE_SAND
+  { 137, 209, 245, 255 }, // PTYPE_WATER
+  { 138, 91, 51, 255 },   // PTYPE_WOOD
+  { 247, 83, 47, 255 },   // PTYPE_FIRE
+  { 74, 74, 74, 255 },    // PTYPE_SMOKE
+};
+
 int main(int argc, char *argv[]) {
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "powder");
     SetTargetFPS(WINDOW_FPS);
@@ -100,60 +110,7 @@ int main(int argc, char *argv[]) {
 
                 for (short i = ci * CELL_SIZE; i < (ci + 1) * CELL_SIZE; i++) {
                     for (short j = cj * CELL_SIZE; j < (cj + 1) * CELL_SIZE; j++) {
-                        Color col;
-                        col.a = 255;
-                        switch (Particle_getType(World_getParticle(w, i, j))) {
-                            case PTYPE_SAND:
-                                col.r = 247;
-                                col.g = 213;
-                                col.b = 134;
-                                break;
-                            case PTYPE_WATER:
-                                col.r = 137;
-                                col.g = 209;
-                                col.b = 245;
-                                break;
-                            case PTYPE_WOOD:
-                                col.r = 138;
-                                col.g = 91;
-                                col.b = 51;
-                                break;
-                            case PTYPE_FIRE:
-                                col.r = 247;
-                                col.g = 83;
-                                col.b = 42;
-                                break;
-                            case PTYPE_SMOKE:
-                                col.r = 74;
-                                col.g = 74;
-                                col.b = 74;
-                                break;
-                            default:
-                                col.r = 0;
-                                col.g = 0;
-                                col.b = 0;
-                                break;
-                          }
-
-                        // TEMP: debugging water flow
-                        /*
-                        if (Particle_getType(World_getParticle(w, i, j)) == PTYPE_WATER) {
-                          switch (Particle_getLastSpreadDir(World_getParticle(w, i, j)))
-                          {
-                            case SPREAD_LEFT:
-                              col.r = 255;
-                              col.g = 0;
-                              col.b = 0;
-                              break;
-                            case SPREAD_RIGHT:
-                              col.r = 0;
-                              col.g = 0;
-                              col.b = 255;
-                              break;
-                          }
-                        }
-                        */
-
+                        Color col = color_map[Particle_getType(World_getParticle(w, i, j))];
                         DrawRectangle(i * PARTICLE_SCALE, j * PARTICLE_SCALE,
                                       PARTICLE_SCALE, PARTICLE_SCALE,
                                       col);
@@ -161,8 +118,6 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
-
-        DrawFPS(2, 2);
 
         EndDrawing();
     }

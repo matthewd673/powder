@@ -1,5 +1,6 @@
 #define CELL_SIZE   10.f
 
+#define PTYPE_LEN   6
 #define PTYPE_NONE  0x0
 #define PTYPE_SAND  0x1
 #define PTYPE_WATER 0x2
