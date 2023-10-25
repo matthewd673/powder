@@ -1,12 +1,14 @@
 #define CELL_SIZE   10.f
 
-#define PTYPE_LEN   6
+#define PTYPE_LEN   8
 #define PTYPE_NONE  0x0
 #define PTYPE_SAND  0x1
 #define PTYPE_WATER 0x2
 #define PTYPE_WOOD  0x3
 #define PTYPE_FIRE  0x4
 #define PTYPE_SMOKE 0x5
+#define PTYPE_METAL 0x6
+#define PTYPE_ACID  0x7
 
 #define SPREAD_LEFT   -1
 #define SPREAD_RIGHT  1

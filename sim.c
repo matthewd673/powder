@@ -342,6 +342,26 @@ int sim_spread_up(World w, Particle p, short x, short y) {
     return 0;
 }
 
+int sim_dissolve(World w, Particle p, short x, short y) {
+  // search all neighbors for something dissolvable
+  for (int i = x - 1; i <= x + 1; i++) {
+    for (int j = y - 1; j <= y + 1; j++) {
+      // skip out of bounds
+      if (i < 0 || i >= w->w || j < 0 || j >= w->h) {
+        continue;
+      }
+
+      Particle neighbor = World_getParticle(w, i, j);
+
+      if (neighbor->type == PTYPE_METAL) {
+        neighbor->type = PTYPE_NONE; // dissolves instantly
+      }
+    }
+  }
+
+  return 1;
+}
+
 void World_simulate(World w) {
     // update
     Particle current;
@@ -397,6 +417,16 @@ void World_simulate(World w) {
                         break;
                         case PTYPE_SMOKE:
                             sim_spread_up(w, current, i, j);
+                        break;
+                        case PTYPE_METAL:
+                          // empty: metal does nothing
+                        break;
+                        case PTYPE_ACID:
+                          // behave like water
+                          if (!sim_pile(w, current, i, j)) {
+                            sim_spread(w, current, i, j);
+                          }
+                          sim_dissolve(w, current, i, j);
                         break;
                     }
                     current->ticked = 1;
