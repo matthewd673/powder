@@ -35,6 +35,21 @@ struct World {
     short ch;
 };
 
+#define IS_EMPTY(p)        prop_table[p] & 0x1
+#define IS_FLAMMABLE(p)    prop_table[p] & 0x10
+#define IS_DISSOLVABLE(p)  prop_table[p] & 0x100
+
+short prop_table[] = {
+  0x001,  // PTYPE_NONE:  empty
+  0x000,  // PTYPE_SAND:  no props
+  0x000,  // PTYPE_WATER: no props
+  0x110,  // PTYPE_WOOD:  flammable, dissolvable
+  0x000,  // PTYPE_FIRE:  no props
+  0x000,  // PTYPE_SMOKE: no props
+  0x100,  // PTYPE_METAL: dissolvable
+  0x000,  // PTYPE_ACID:  no props
+};
+
 Particle new_Particle(char type) {
     Particle this = (Particle)malloc(sizeof(struct Particle));
     if (this == NULL) {
@@ -179,7 +194,7 @@ int sim_pile(World w, Particle p, short x, short y) {
     int moveY = y;
     for (int k = 1; k <= p->vel; k++) {
         if (y + k < w->h &&
-            World_getParticle(w, x, y + k)->type == PTYPE_NONE) {
+            IS_EMPTY(World_getParticle(w, x, y + k)->type)) {
                 moveY = y + k;
             }
         else {
@@ -192,12 +207,12 @@ int sim_pile(World w, Particle p, short x, short y) {
         p->vel = clamp(p->vel + GRAVITY_ACC, -MAX_VEL, MAX_VEL);
         return 1;
     }
-    else if (x > 0 && World_getParticle(w, x - 1, y + 1)->type == PTYPE_NONE) {
+    else if (x > 0 && IS_EMPTY(World_getParticle(w, x - 1, y + 1)->type)) {
         World_swapParticle(w, x, y, x - 1, y + 1);
         p->vel = START_VEL;
         return 1;
     }
-    else if (x < w->w - 1 && World_getParticle(w, x + 1, y + 1)->type == PTYPE_NONE) {
+    else if (x < w->w - 1 && IS_EMPTY(World_getParticle(w, x + 1, y + 1)->type)) {
         World_swapParticle(w, x, y, x + 1, y + 1);
         p->vel = START_VEL;
         return 1;
@@ -212,14 +227,14 @@ int sim_pile(World w, Particle p, short x, short y) {
 int sim_spread(World w, Particle p, short x, short y) {
     // spread left if right is occupied
     if (x >= w->w - 1 || // right is out of bounds
-        x < w->w - 1 && World_getParticle(w, x + 1, y)->type != PTYPE_NONE // right is occupied
+        x < w->w - 1 && !(IS_EMPTY(World_getParticle(w, x + 1, y)->type)) // right is occupied
         ) {
       p->lastSpreadDir = SPREAD_LEFT;
     }
 
     // spread right if left is occupied
     if (x <= 0 || // left is out of bounds
-        x > 0 && World_getParticle(w, x - 1, y)->type != PTYPE_NONE // left is occupied
+        x > 0 && !(IS_EMPTY(World_getParticle(w, x - 1, y)->type)) // left is occupied
         ) {
       p->lastSpreadDir = SPREAD_RIGHT;
     }
@@ -244,7 +259,7 @@ int sim_spread(World w, Particle p, short x, short y) {
       }
 
       // update current move
-      if (World_getParticle(w, try_pos, y)->type == PTYPE_NONE) {
+      if (IS_EMPTY(World_getParticle(w, try_pos, y)->type)) {
         movex = try_pos;
       }
     }
@@ -275,7 +290,7 @@ int sim_burn(World w, Particle p, short x, short y) {
 
             Particle neighbor = World_getParticle(w, i, j);
 
-            if (neighbor->type == PTYPE_WOOD) {
+            if (IS_FLAMMABLE(neighbor->type)) {
                 // wait to spread
                 if (p->lifetime < LIFETIME_FIRE / 2) {
                     continue;
@@ -288,7 +303,7 @@ int sim_burn(World w, Particle p, short x, short y) {
                 neighbor->lifetime = 0;
                 spread = spread | 0x1;
             }
-            else if (neighbor->type == PTYPE_NONE) {
+            else if (IS_EMPTY(neighbor->type)) {
                 // only upwards
                 if (j >= y) {
                     continue;
@@ -320,7 +335,7 @@ int sim_burn(World w, Particle p, short x, short y) {
 
 int sim_spread_up(World w, Particle p, short x, short y) {
     // attempt to go up
-    if (y > 0 && World_getParticle(w, x, y - 1)->type == PTYPE_NONE) {
+    if (y > 0 && IS_EMPTY(World_getParticle(w, x, y - 1)->type)) {
         World_swapParticle(w, x, y, x, y - 1);
         return 1;
     }
@@ -330,11 +345,11 @@ int sim_spread_up(World w, Particle p, short x, short y) {
         Particle_reset(p);
     }
     // try to spread
-    else if (x > 0 && World_getParticle(w, x - 1, y)->type == PTYPE_NONE) {
+    else if (x > 0 && IS_EMPTY(World_getParticle(w, x - 1, y)->type)) {
         World_swapParticle(w, x, y, x - 1, y);
         return 1;
     }
-    else if (x < w->w - 1 && World_getParticle(w, x + 1, y)->type == PTYPE_NONE) {
+    else if (x < w->w - 1 && IS_EMPTY(World_getParticle(w, x + 1, y)->type)) {
         World_swapParticle(w, x, y, x + 1, y);
         return 1;
     }
@@ -353,7 +368,7 @@ int sim_dissolve(World w, Particle p, short x, short y) {
 
       Particle neighbor = World_getParticle(w, i, j);
 
-      if (neighbor->type == PTYPE_METAL) {
+      if (IS_DISSOLVABLE(neighbor->type)) {
         neighbor->type = PTYPE_NONE; // dissolves instantly
       }
     }
