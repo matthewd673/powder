@@ -21,6 +21,8 @@ struct Particle {
     float spreadVel;
     char lastSpreadDir;
     short lifetime;
+
+    float saturation;
 };
 
 struct World {
@@ -47,6 +49,8 @@ Particle new_Particle(char type) {
     this->lastSpreadDir = randBoolean() ? SPREAD_LEFT : SPREAD_RIGHT;
     this->lifetime = 0;
 
+    this->saturation = randFloatRange(0.6f, 1.f);
+
     return this;
 }
 
@@ -59,6 +63,10 @@ void Particle_setType(Particle p, char type) {
 
 char Particle_getLastSpreadDir(Particle p) {
   return p->lastSpreadDir;
+}
+
+float Particle_getSaturation(Particle p) {
+  return p->saturation;
 }
 
 void Particle_reset(Particle p) {
@@ -369,12 +377,7 @@ void World_simulate(World w) {
                     // simulate each particle type appropriately
                     switch (current->type) {
                         case PTYPE_SAND:
-                            // skip sand at bottom of screen
-                            if (j == w->h - 1) {
-                                break;
-                            }
-
-                            sim_pile(w, current, i, j);
+                           sim_pile(w, current, i, j);
                         break;
                         case PTYPE_WATER:
                             if (!sim_pile(w, current, i, j)) {

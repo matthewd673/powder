@@ -16,6 +16,10 @@ float randFloat() {
     return rand() / (float)RAND_MAX;
 }
 
+float randFloatRange(float min, float max) {
+  return min + (max - min) * randFloat();
+}
+
 char randBoolean() {
   return randFloat() >= 0.5f;
 }

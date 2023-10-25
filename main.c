@@ -17,7 +17,7 @@
 struct Color color_map[] = {
   { 0, 0, 0, 255 },       // PTYPE_NONE
   { 247, 213, 134, 255 }, // PTYPE_SAND
-  { 137, 209, 245, 255 }, // PTYPE_WATER
+  { 11, 78, 120, 255 },   // PTYPE_WATER
   { 138, 91, 51, 255 },   // PTYPE_WOOD
   { 247, 83, 47, 255 },   // PTYPE_FIRE
   { 74, 74, 74, 255 },    // PTYPE_SMOKE
@@ -110,7 +110,13 @@ int main(int argc, char *argv[]) {
 
                 for (short i = ci * CELL_SIZE; i < (ci + 1) * CELL_SIZE; i++) {
                     for (short j = cj * CELL_SIZE; j < (cj + 1) * CELL_SIZE; j++) {
-                        Color col = color_map[Particle_getType(World_getParticle(w, i, j))];
+                        Particle p = World_getParticle(w, i, j);
+                        // determine particle color
+                        Color col = color_map[Particle_getType(p)];
+                        col.r *= Particle_getSaturation(p);
+                        col.g *= Particle_getSaturation(p);
+                        col.b *= Particle_getSaturation(p);
+
                         DrawRectangle(i * PARTICLE_SCALE, j * PARTICLE_SCALE,
                                       PARTICLE_SCALE, PARTICLE_SCALE,
                                       col);

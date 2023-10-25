@@ -19,6 +19,7 @@ Particle new_Particle(char type);
 char Particle_getType(Particle p);
 void Particle_setType(Particle p, char type);
 char Particle_getLastSpreadDir(Particle p);
+float Particle_getSaturation(Particle p);
 
 World new_World(short width, short height);
 void free_World(World w);
