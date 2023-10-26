@@ -457,7 +457,7 @@ void World_simulate(World w) {
     short activeCt = 0;
     short active = 0;
     for (short ci = 0; ci < w->cw; ci++) {
-        for (short cj = 0; cj < w->ch; cj++) {
+        for (short cj = w->ch - 1; cj >= 0; cj--) {
             active = w->c[cj * w->ch + ci];
 
             if (!active) {
@@ -473,7 +473,7 @@ void World_simulate(World w) {
 
             // simulate particles within cell
             for (short i = ci * CELL_SIZE; i < (ci + 1) * CELL_SIZE; i++) {
-                for (short j = cj * CELL_SIZE; j < (cj + 1) * CELL_SIZE; j++) {
+                for (short j = (cj + 1) * CELL_SIZE - 1; j >= cj * CELL_SIZE; j--) {
                     current = World_getParticle(w, i, j);
 
                     if (current->ticked) {
@@ -487,8 +487,9 @@ void World_simulate(World w) {
                            sim_pile(w, current, i, j);
                         break;
                         case PTYPE_WATER:
-                          sim_fall(w, current, i, j);
-                          sim_spread(w, current, i, j);
+                          if (!sim_pile(w, current, i, j)) {
+                            sim_spread(w, current, i, j);
+                          }
                         break;
                         case PTYPE_WOOD:
                           // empty: wood does nothing
