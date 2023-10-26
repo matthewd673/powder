@@ -29,7 +29,8 @@ int main(int argc, char *argv[]) {
   InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "powder");
   SetTargetFPS(WINDOW_FPS);
 
-  RenderTexture2D renderTexture = LoadRenderTexture(WINDOW_WIDTH, WINDOW_HEIGHT);
+  RenderTexture2D worldTexture = LoadRenderTexture(WINDOW_WIDTH, WINDOW_HEIGHT);
+  RenderTexture2D glowTexture = LoadRenderTexture(WINDOW_WIDTH, WINDOW_HEIGHT);
 
   World w = new_World(WORLD_WIDTH, WORLD_HEIGHT);
 
@@ -109,7 +110,8 @@ int main(int argc, char *argv[]) {
     World_simulate(w);
 
     // DRAWING
-    BeginTextureMode(renderTexture);
+    // draw world texture
+    BeginTextureMode(worldTexture);
 
     // loop through every cell
     for (short ci = 0; ci < World_getCellWidth(w); ci++) {
@@ -127,6 +129,18 @@ int main(int argc, char *argv[]) {
             col.g *= Particle_getSaturation(p);
             col.b *= Particle_getSaturation(p);
 
+//            if (Particle_getType(p) == PTYPE_WATER &&
+//                Particle_getLastSpreadDir(p) == SPREAD_LEFT) {
+//              col.r = 0;
+//              col.g = 0;
+//              col.b = 255;
+//            }
+//            else if (Particle_getType(p) == PTYPE_WATER) {
+//              col.r = 255;
+//              col.g = 0;
+//              col.b = 0;
+//            }
+
             DrawRectangle(i * PARTICLE_SCALE, -j * PARTICLE_SCALE + WINDOW_HEIGHT,
                           PARTICLE_SCALE, PARTICLE_SCALE,
                           col);
@@ -138,7 +152,7 @@ int main(int argc, char *argv[]) {
     EndTextureMode();
 
     BeginDrawing();
-    DrawTexture(renderTexture.texture, 0, 0, WHITE);
+    DrawTexture(worldTexture.texture, 0, 0, WHITE);
     EndDrawing();
   }
 

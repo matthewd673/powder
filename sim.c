@@ -8,11 +8,12 @@
 #define GRAVITY_ACC     .1568f
 #define START_VEL       1.f
 #define MAX_VEL         9.8f
-#define SPREAD_ACC      .157f // formerly .0157 but this fixes right spread
+#define SPREAD_ACC      .0157f
 #define START_SPREAD    1.f
 #define MAX_SPREAD      3.f
 
 #define LIFETIME_FIRE   24
+#define STRENGTH_ACID   3
 
 struct Particle {
     char type;
@@ -64,7 +65,7 @@ Particle new_Particle(char type) {
     this->lastSpreadDir = randBoolean() ? SPREAD_LEFT : SPREAD_RIGHT;
     this->lifetime = 0;
 
-    this->saturation = randFloatRange(0.6f, 1.f);
+    this->saturation = randFloatRange(0.8f, 1.f);
 
     return this;
 }
@@ -224,6 +225,76 @@ int sim_pile(World w, Particle p, short x, short y) {
     }
 }
 
+int sim_fall(World w, Particle p, short x, short y) {
+  if (y == w->h -1) {
+    return 0;
+  }
+
+  // try to fall down at velocity
+  int movey = y;
+  for (int k = 1; k <= p->vel; k++) {
+    if (y + k < w->h &&
+        IS_EMPTY(World_getParticle(w, x, y + k)->type)
+       ) {
+      movey = y + k;
+    }
+    else {
+      break;
+    }
+  }
+
+  // made a move down
+  if (movey != y) {
+    World_swapParticle(w, x, y, x, movey);
+    p->vel = clamp(p->vel + GRAVITY_ACC, -MAX_VEL, MAX_VEL);
+    return 1;
+  }
+
+  // didn't move down, try a diagonal down in both directions
+  int bestx = x;
+  int besty = y;
+
+  for (int k = 1; k <= p->vel; k++) {
+    int dy = y + k;
+    if (dy >= w->h) {
+      break;
+    }
+
+    for (int l = 1; l <= p->spreadVel; l++) {
+      // begin with the last spread direction
+      int dx = x + l*p->lastSpreadDir;
+      // one iteration for each direction:
+      for (int i = 0; i <= 1; i++) {
+        if (dx < 0 || dx >= w->w) {
+          break;
+        }
+
+        if (((dx < x && x > 0) || (dx > x && x < w->w - 1)) && // check in bounds
+            IS_EMPTY(World_getParticle(w, dx, y + 1)->type) // check empty
+           ) {
+          if (y > besty ||
+              y == besty && abs(x - bestx) < abs(x - dx)) {
+            bestx = dx;
+            besty = dy;
+          }
+          //p->vel = START_VEL; // TODO: should this reset velocity?
+        }
+        // check other direction for second iteration
+        dx = x - l*p->lastSpreadDir;
+      }
+    }
+  }
+
+  if (besty != y) {
+    World_swapParticle(w, x, y, bestx, besty);
+    return 1;
+  }
+
+  // all previous attempts to move failed, it isn't possible right now
+  p->vel = START_VEL;
+  return 0;
+}
+
 int sim_spread(World w, Particle p, short x, short y) {
     // spread left if right is occupied
     if (x >= w->w - 1 || // right is out of bounds
@@ -370,6 +441,7 @@ int sim_dissolve(World w, Particle p, short x, short y) {
 
       if (IS_DISSOLVABLE(neighbor->type)) {
         neighbor->type = PTYPE_NONE; // dissolves instantly
+        p->lifetime++; // increase "lifetime"
       }
     }
   }
@@ -415,9 +487,8 @@ void World_simulate(World w) {
                            sim_pile(w, current, i, j);
                         break;
                         case PTYPE_WATER:
-                            if (!sim_pile(w, current, i, j)) {
-                                sim_spread(w, current, i, j);
-                            }
+                          sim_fall(w, current, i, j);
+                          sim_spread(w, current, i, j);
                         break;
                         case PTYPE_WOOD:
                           // empty: wood does nothing
@@ -442,6 +513,12 @@ void World_simulate(World w) {
                             sim_spread(w, current, i, j);
                           }
                           sim_dissolve(w, current, i, j);
+
+                          // TODO: better acid behavior
+                          // lifetime is based on amount of things dissolved
+                          if (current->lifetime >= STRENGTH_ACID) {
+                            Particle_reset(current);
+                          }
                         break;
                     }
                     current->ticked = 1;
