@@ -29,7 +29,7 @@ void free_World(World w);
 Particle World_getParticle(World w, short x, short y);
 short World_getCellWidth(World w);
 short World_getCellHeight(World w);
-short World_getCellStatusExact(World w, short cx, short cy);
+char World_getCellStatusExact(World w, short cx, short cy);
 
 void World_setParticle(World w, short x, short y, Particle p);
 void World_swapParticle(World w, short x1, short y1, short x2, short y2);

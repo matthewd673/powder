@@ -116,7 +116,7 @@ int main(int argc, char *argv[]) {
     // loop through every cell
     for (short ci = 0; ci < World_getCellWidth(w); ci++) {
       for (short cj = 0; cj < World_getCellHeight(w); cj++) {
-        if (!World_getCellStatusExact(w, ci, cj)) {
+        if (World_getCellStatusExact(w, ci, cj) == 0) {
           continue;
         }
 
@@ -129,17 +129,17 @@ int main(int argc, char *argv[]) {
             col.g *= Particle_getSaturation(p);
             col.b *= Particle_getSaturation(p);
 
-//            if (Particle_getType(p) == PTYPE_WATER &&
-//                Particle_getLastSpreadDir(p) == SPREAD_LEFT) {
-//              col.r = 0;
-//              col.g = 0;
-//              col.b = 255;
-//            }
-//            else if (Particle_getType(p) == PTYPE_WATER) {
-//              col.r = 255;
-//              col.g = 0;
-//              col.b = 0;
-//            }
+            if (Particle_getType(p) == PTYPE_WATER &&
+                Particle_getLastSpreadDir(p) == SPREAD_LEFT) {
+              col.r = 0;
+              col.g = 0;
+              col.b = 255;
+            }
+            else if (Particle_getType(p) == PTYPE_WATER) {
+              col.r = 255;
+              col.g = 0;
+              col.b = 0;
+            }
 
             DrawRectangle(i * PARTICLE_SCALE, -j * PARTICLE_SCALE + WINDOW_HEIGHT,
                           PARTICLE_SCALE, PARTICLE_SCALE,
@@ -151,8 +151,28 @@ int main(int argc, char *argv[]) {
 
     EndTextureMode();
 
+    // draw to screen
     BeginDrawing();
+
+    // draw heatmap
+    for (short i = 0; i < World_getCellWidth(w); i++) {
+      for (short j = 0; j < World_getCellHeight(w); j++) {
+        Color col = { 0, 0, 50, 255 };
+        // lifetime = 2
+        if (World_getCellStatusExact(w, i, j) & 0x10) {
+          col.r = 255;
+        }
+        // lifetime = 1
+        else if (World_getCellStatusExact(w, i, j) & 0x01) {
+          col.r = 127;
+        }
+
+        DrawRectangle(i * 3, j * 3, 3, 3, col);
+      }
+    }
+
     DrawTexture(worldTexture.texture, 0, 0, WHITE);
+
     EndDrawing();
   }
 

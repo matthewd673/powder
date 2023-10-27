@@ -31,14 +31,10 @@ struct World {
     short w;
     short h;
 
-    short *c;
+    char *c;
     short cw;
     short ch;
 };
-
-#define IS_EMPTY(p)        prop_table[p] & 0x1
-#define IS_FLAMMABLE(p)    prop_table[p] & 0x10
-#define IS_DISSOLVABLE(p)  prop_table[p] & 0x100
 
 short prop_table[] = {
   0x001,  // PTYPE_NONE:  empty
@@ -50,6 +46,10 @@ short prop_table[] = {
   0x100,  // PTYPE_METAL: dissolvable
   0x000,  // PTYPE_ACID:  no props
 };
+
+#define IS_EMPTY(p)        prop_table[p] & 0x1
+#define IS_FLAMMABLE(p)    prop_table[p] & 0x10
+#define IS_DISSOLVABLE(p)  prop_table[p] & 0x100
 
 Particle new_Particle(char type) {
     Particle this = (Particle)malloc(sizeof(struct Particle));
@@ -121,7 +121,7 @@ World new_World(short width, short height) {
     this->ch = (int)ceil(height / CELL_SIZE);
     printf("world cells: %dx%d (%d)\n", this->cw, this->ch, this->cw * this->ch);
 
-    this->c = (short *)malloc(this->cw * this->ch * sizeof(short));
+    this->c = (char *)malloc(this->cw * this->ch * sizeof(short));
     for (int i = 0; i < this->cw * this->ch; i++) {
         this->c[i] = 1; // default all cells to on
     }
@@ -153,20 +153,28 @@ void World_activateCell(World w, short x, short y) {
     w->c[i] = 2; // 2 chances to stay active
 
     // activate surrounding cells (no diagonals)
-    if (cx > 0) w->c[i - 1] = 2;
-    if (cx < w->cw - 1) w->c[i + 1] = 2;
-    if (cy > 0) w->c[i - w->cw] = 2;
-    if (cy < w->ch - 1) w->c[i + w->cw] = 2;
+    if (cx > 0) {
+      w->c[i - 1] = 2;
+    }
+    if (cx < w->cw - 1) {
+      w->c[i + 1] = 2;
+    }
+    if (cy > 0) {
+      w->c[i - w->cw] = 2;
+    }
+    if (cy < w->ch - 1) {
+      w->c[i + w->cw] = 2;
+    }
 }
 
-short World_getCellStatus(World w, short x, short y) {
+char World_getCellStatus(World w, short x, short y) {
     short cx = (short)floor(x / CELL_SIZE);
     short cy = (short)floor(y / CELL_SIZE);
 
     return w->c[cy * w->cw + cx];
 }
 
-short World_getCellStatusExact(World w, short cx, short cy) {
+char World_getCellStatusExact(World w, short cx, short cy) {
     return w->c[cy * w->cw + cx];
 }
 
@@ -260,28 +268,20 @@ int sim_fall(World w, Particle p, short x, short y) {
       break;
     }
 
-    for (int l = 1; l <= p->spreadVel; l++) {
-      // begin with the last spread direction
-      int dx = x + l*p->lastSpreadDir;
-      // one iteration for each direction:
-      for (int i = 0; i <= 1; i++) {
-        if (dx < 0 || dx >= w->w) {
-          break;
-        }
-
-        if (((dx < x && x > 0) || (dx > x && x < w->w - 1)) && // check in bounds
-            IS_EMPTY(World_getParticle(w, dx, y + 1)->type) // check empty
-           ) {
-          if (y > besty ||
-              y == besty && abs(x - bestx) < abs(x - dx)) {
-            bestx = dx;
-            besty = dy;
-          }
-          //p->vel = START_VEL; // TODO: should this reset velocity?
-        }
-        // check other direction for second iteration
-        dx = x - l*p->lastSpreadDir;
+    // begin with the last spread direction
+    int dx = x + p->lastSpreadDir;
+    for (int i = 0; i <= 1; i++) {
+      if (dx < 0 || dx >= w->w) {
+        break;
       }
+
+      if (IS_EMPTY(World_getParticle(w, dx, dy)->type) &&
+          dy > besty) {
+        bestx = dx;
+        besty = dy;
+      }
+      // check other direction for second iteration
+      dx = x - p->lastSpreadDir;
     }
   }
 
@@ -329,9 +329,17 @@ int sim_spread(World w, Particle p, short x, short y) {
         break;
       }
 
-      // update current move
+      // can move again
       if (IS_EMPTY(World_getParticle(w, try_pos, y)->type)) {
         movex = try_pos;
+      }
+      // blocked by the same type of particle
+//      else if (World_getParticle(w, try_pos, y)->type == p->type) {
+//        continue;
+//      }
+      // cannot move anywhere
+      else {
+        break;
       }
     }
 
@@ -454,8 +462,8 @@ void World_simulate(World w) {
     Particle current;
 
     // loop through every cell
-    short activeCt = 0;
-    short active = 0;
+    short active_ct = 0;
+    char active = 0;
     for (short ci = 0; ci < w->cw; ci++) {
         for (short cj = w->ch - 1; cj >= 0; cj--) {
             active = w->c[cj * w->ch + ci];
@@ -463,8 +471,7 @@ void World_simulate(World w) {
             if (!active) {
                 continue;
             }
-
-            activeCt++;
+            active_ct++;
 
             // deactivate cell
             // cells have 2 chances to stay active before they're turned off
@@ -477,19 +484,18 @@ void World_simulate(World w) {
                     current = World_getParticle(w, i, j);
 
                     if (current->ticked) {
-                        current->ticked = 0;
-                        continue;
+                      current->ticked = 0;
+                      continue;
                     }
 
                     // simulate each particle type appropriately
                     switch (current->type) {
                         case PTYPE_SAND:
-                           sim_pile(w, current, i, j);
+                           sim_fall(w, current, i, j);
                         break;
                         case PTYPE_WATER:
-                          if (!sim_pile(w, current, i, j)) {
-                            sim_spread(w, current, i, j);
-                          }
+                          //sim_fall(w, current, i, j);
+                          sim_spread(w, current, i, j);
                         break;
                         case PTYPE_WOOD:
                           // empty: wood does nothing
