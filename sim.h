@@ -32,6 +32,6 @@ short World_getCellHeight(World w);
 char World_getCellStatusExact(World w, short cx, short cy);
 
 void World_setParticle(World w, short x, short y, Particle p);
-void World_swapParticle(World w, short x1, short y1, short x2, short y2);
+void World_resetParticle(World w, short x, short y);
 
 void World_simulate(World w);
