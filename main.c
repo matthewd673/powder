@@ -129,17 +129,18 @@ int main(int argc, char *argv[]) {
             col.g *= Particle_getSaturation(p);
             col.b *= Particle_getSaturation(p);
 
-            if (Particle_getType(p) == PTYPE_WATER &&
-                Particle_getLastSpreadDir(p) == SPREAD_LEFT) {
-              col.r = 0;
-              col.g = 0;
-              col.b = 255;
-            }
-            else if (Particle_getType(p) == PTYPE_WATER) {
-              col.r = 255;
-              col.g = 0;
-              col.b = 0;
-            }
+            // DEBUGGING: visualizing water spread direction
+//            if (Particle_getType(p) == PTYPE_WATER &&
+//                Particle_getLastSpreadDir(p) == SPREAD_LEFT) {
+//              col.r = 0;
+//              col.g = 0;
+//              col.b = 255;
+//            }
+//            else if (Particle_getType(p) == PTYPE_WATER) {
+//              col.r = 255;
+//              col.g = 0;
+//              col.b = 0;
+//            }
 
             DrawRectangle(i * PARTICLE_SCALE, -j * PARTICLE_SCALE + WINDOW_HEIGHT,
                           PARTICLE_SCALE, PARTICLE_SCALE,
@@ -154,6 +155,8 @@ int main(int argc, char *argv[]) {
     // draw to screen
     BeginDrawing();
 
+    DrawTexture(worldTexture.texture, 0, 0, WHITE);
+
     // draw heatmap
     for (short i = 0; i < World_getCellWidth(w); i++) {
       for (short j = 0; j < World_getCellHeight(w); j++) {
@@ -167,11 +170,11 @@ int main(int argc, char *argv[]) {
           col.r = 127;
         }
 
-        DrawRectangle(i * 3, j * 3, 3, 3, col);
+        DrawRectangle(i * 2, j * 2, 2, 2, col);
       }
     }
 
-    DrawTexture(worldTexture.texture, 0, 0, WHITE);
+    DrawFPS(0, 0);
 
     EndDrawing();
   }

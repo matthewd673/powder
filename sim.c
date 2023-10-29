@@ -16,14 +16,47 @@
 #define STRENGTH_ACID   3
 
 struct Particle {
-    char type;
-    char ticked;
-    float vel;
-    float spreadVel;
-    char lastSpreadDir;
-    short lifetime;
+  char type;
+  char lastSpreadDir;
+  short lifetime;
+  float vel;
+  float spreadVel;
+  float saturation;
+};
 
-    float saturation;
+struct ParticleProps {
+  short flags;
+};
+
+#define IS_EMPTY(p)        (prop_table[p].flags & 0x1)
+#define IS_FLAMMABLE(p)    (prop_table[p].flags & 0x10)
+#define IS_DISSOLVABLE(p)  (prop_table[p].flags & 0x100)
+
+struct ParticleProps prop_table[] = {
+  { // PTYPE_NONE
+    0x001,  // flags:  empty
+  },
+  { // PTYPE_SAND
+    0x000,  // flags:  no props
+  },
+  { // PTYPE_WATER
+    0x000,  // flags: no props
+  },
+  { // PTYPE_WOOD
+    0x110,  // flags:  flammable, dissolvable
+  },
+  { // PTYPE_FIRE
+    0x000,  // flags:  no props
+  },
+  { // PTYPE_SMOKE
+    0x001,  // flags: no props
+  },
+  { // PTYPE_METAL
+    0x100,  // flags: dissolvable
+  },
+  { // PTYPE_ACID
+    0x000,  // flags:  no props
+  },
 };
 
 struct World {
@@ -34,47 +67,33 @@ struct World {
     char *c;
     short cw;
     short ch;
-};
 
-short prop_table[] = {
-  0x001,  // PTYPE_NONE:  empty
-  0x000,  // PTYPE_SAND:  no props
-  0x000,  // PTYPE_WATER: no props
-  0x110,  // PTYPE_WOOD:  flammable, dissolvable
-  0x000,  // PTYPE_FIRE:  no props
-  0x000,  // PTYPE_SMOKE: no props
-  0x100,  // PTYPE_METAL: dissolvable
-  0x000,  // PTYPE_ACID:  no props
+    unsigned long *cs;
 };
-
-#define IS_EMPTY(p)        prop_table[p] & 0x1
-#define IS_FLAMMABLE(p)    prop_table[p] & 0x10
-#define IS_DISSOLVABLE(p)  prop_table[p] & 0x100
 
 Particle new_Particle(char type) {
-    Particle this = (Particle)malloc(sizeof(struct Particle));
-    if (this == NULL) {
-        printf("new_Particle NULL\n");
-        return NULL;
-    }
+  Particle this = (Particle)malloc(sizeof(struct Particle));
+  if (this == NULL) {
+    printf("new_Particle NULL\n");
+    return NULL;
+  }
 
-    this->type = type;
-    this->ticked = 0;
-    this->vel = START_VEL;
-    this->spreadVel = START_SPREAD;
-    this->lastSpreadDir = randBoolean() ? SPREAD_LEFT : SPREAD_RIGHT;
-    this->lifetime = 0;
+  this->type = type;
+  this->vel = START_VEL;
+  this->spreadVel = START_SPREAD;
+  this->lastSpreadDir = randBoolean() ? SPREAD_LEFT : SPREAD_RIGHT;
+  this->lifetime = 0;
 
-    this->saturation = randFloatRange(0.8f, 1.f);
+  this->saturation = randFloatRange(0.8f, 1.f);
 
-    return this;
+  return this;
 }
 
 char Particle_getType(Particle p) {
-    return p->type;
+  return p->type;
 }
 void Particle_setType(Particle p, char type) {
-    p->type = type;
+  p->type = type;
 }
 
 char Particle_getLastSpreadDir(Particle p) {
@@ -86,16 +105,15 @@ float Particle_getSaturation(Particle p) {
 }
 
 void Particle_reset(Particle p) {
-    p->type = PTYPE_NONE;
-    p->ticked = 0;
-    p->vel = START_VEL;
-    p->spreadVel = START_SPREAD;
-    p->lastSpreadDir = SPREAD_LEFT;
-    p->lifetime = 0;
+  p->type = PTYPE_NONE;
+  p->vel = START_VEL;
+  p->spreadVel = START_SPREAD;
+  p->lastSpreadDir = SPREAD_LEFT;
+  p->lifetime = 0;
 }
 
 World new_World(short width, short height) {
-    printf("try make world\n");
+    printf("Beginning world init\n");
     World this = (World)malloc(sizeof(struct World));
     if (this == NULL) {
         return NULL;
@@ -104,7 +122,8 @@ World new_World(short width, short height) {
     this->w = width;
     this->h = height;
 
-    printf("world size: %d\n", width * height);
+    printf("World size: %dx%d (%d)\n", width, height, width * height);
+    printf("Particle struct size: %lu\n", sizeof(struct Particle));
     Particle *grid = (Particle *)malloc(width * height * sizeof(Particle));
     if (grid == NULL) {
         return NULL;
@@ -113,20 +132,23 @@ World new_World(short width, short height) {
     for (int i = 0; i < width * height; i++) {
         grid[i] = new_Particle(0x0);
     }
-    printf("done world init\n");
+    printf("Done world init\n");
     this->p = grid;
 
     // generate cells
+    printf("Beginning world cell init\n");
     this->cw = (int)ceil(width / CELL_SIZE);
     this->ch = (int)ceil(height / CELL_SIZE);
-    printf("world cells: %dx%d (%d)\n", this->cw, this->ch, this->cw * this->ch);
+    printf("World cell size: %dx%d (%d)\n", this->cw, this->ch, this->cw * this->ch);
 
     this->c = (char *)malloc(this->cw * this->ch * sizeof(short));
     for (int i = 0; i < this->cw * this->ch; i++) {
         this->c[i] = 1; // default all cells to on
     }
 
-    printf("done world cell init\n");
+    this->cs = (unsigned long *)malloc(this->cw * this->ch * sizeof(unsigned long));
+
+    printf("Done world cell init\n");
 
     return this;
 }
@@ -134,6 +156,7 @@ World new_World(short width, short height) {
 void free_World(World w) {
     free(w->p);
     free(w->c);
+    free(w->cs);
     free(w);
 }
 
@@ -414,7 +437,10 @@ int sim_burn(World w, Particle p, short x, short y) {
 
 int sim_spread_up(World w, Particle p, short x, short y) {
     // attempt to go up
-    if (y > 0 && IS_EMPTY(World_getParticle(w, x, y - 1)->type)) {
+    if (y > 0 &&
+        IS_EMPTY(World_getParticle(w, x, y - 1)->type) && // empty space
+        World_getParticle(w, x, y - 1)->type != p->type // not swapping with same type
+        ) {
         World_swapParticle(w, x, y, x, y - 1);
         return 1;
     }
@@ -458,79 +484,86 @@ int sim_dissolve(World w, Particle p, short x, short y) {
 }
 
 void World_simulate(World w) {
-    // update
-    Particle current;
+  // loop through every cell
+  short active_ct = 0;
+  for (short ci = 0; ci < w->cw; ci++) {
+    for (short cj = w->ch - 1; cj >= 0; cj--) {
+      int c_index = cj * w->ch + ci;
+      char active = w->c[c_index];
 
-    // loop through every cell
-    short active_ct = 0;
-    char active = 0;
-    for (short ci = 0; ci < w->cw; ci++) {
-        for (short cj = w->ch - 1; cj >= 0; cj--) {
-            active = w->c[cj * w->ch + ci];
+      if (!active) {
+        continue;
+      }
+      active_ct++;
 
-            if (!active) {
-                continue;
-            }
-            active_ct++;
+      // deactivate cell
+      // cells have 2 chances to stay active before they're turned off
+      // (so that particles falling into a cell and activating it don't get stuck)
+      w->c[c_index]--;
 
-            // deactivate cell
-            // cells have 2 chances to stay active before they're turned off
-            // (so that particles falling into a cell and activating it don't get stuck)
-            w->c[cj * w->ch + ci]--;
+      // simulate particles within cell
+      for (short i = ci * CELL_SIZE; i < (ci + 1) * CELL_SIZE; i++) {
+        for (short j = (cj + 1) * CELL_SIZE - 1; j >= cj * CELL_SIZE; j--) {
+          Particle current = World_getParticle(w, i, j);
 
-            // simulate particles within cell
-            for (short i = ci * CELL_SIZE; i < (ci + 1) * CELL_SIZE; i++) {
-                for (short j = (cj + 1) * CELL_SIZE - 1; j >= cj * CELL_SIZE; j--) {
-                    current = World_getParticle(w, i, j);
+          // find particle in cell map
+          int rx = i - ci * CELL_SIZE; // relative x in cell
+          int ry = j - cj * CELL_SIZE; // relative y in cell
+          unsigned long c_mask = ((long)0x1) << (ry * CELL_SIZE + rx);
 
-                    if (current->ticked) {
-                      current->ticked = 0;
-                      continue;
-                    }
+          // check if particle ticked
+          if ((w->cs[c_index] & c_mask) != 0) {
+            continue;
+          }
 
-                    // simulate each particle type appropriately
-                    switch (current->type) {
-                        case PTYPE_SAND:
-                           sim_fall(w, current, i, j);
-                        break;
-                        case PTYPE_WATER:
-                          //sim_fall(w, current, i, j);
-                          sim_spread(w, current, i, j);
-                        break;
-                        case PTYPE_WOOD:
-                          // empty: wood does nothing
-                        break;
-                        case PTYPE_FIRE:
-                            World_activateCell(w, i, j);
-                            current->lifetime++;
-                            if (current->lifetime >= LIFETIME_FIRE) {
-                                Particle_reset(current);
-                            }
-                            sim_burn(w, current, i, j);
-                        break;
-                        case PTYPE_SMOKE:
-                            sim_spread_up(w, current, i, j);
-                        break;
-                        case PTYPE_METAL:
-                          // empty: metal does nothing
-                        break;
-                        case PTYPE_ACID:
-                          // behave like water
-                          if (!sim_pile(w, current, i, j)) {
-                            sim_spread(w, current, i, j);
-                          }
-                          sim_dissolve(w, current, i, j);
+          // simulate each particle type appropriately
+          switch (current->type) {
+            case PTYPE_SAND:
+              sim_fall(w, current, i, j);
+            break;
+            case PTYPE_WATER:
+              //sim_fall(w, current, i, j);
+              sim_spread(w, current, i, j);
+            break;
+            case PTYPE_WOOD:
+              // empty: wood does nothing
+            break;
+            case PTYPE_FIRE:
+              World_activateCell(w, i, j);
+              current->lifetime++;
+              if (current->lifetime >= LIFETIME_FIRE) {
+                Particle_reset(current);
+              }
+              sim_burn(w, current, i, j);
+            break;
+            case PTYPE_SMOKE:
+              sim_spread_up(w, current, i, j);
+            break;
+            case PTYPE_METAL:
+              // empty: metal does nothing
+            break;
+            case PTYPE_ACID:
+              // behave like water
+              if (!sim_pile(w, current, i, j)) {
+                sim_spread(w, current, i, j);
+              }
+              sim_dissolve(w, current, i, j);
 
-                          // TODO: better acid behavior
-                          // lifetime is based on amount of things dissolved
-                          if (current->lifetime >= STRENGTH_ACID) {
-                            Particle_reset(current);
-                          }
-                        break;
-                    }
-                    current->ticked = 1;
-                }
-            }
+              // TODO: better acid behavior
+              // lifetime is based on amount of things dissolved
+              if (current->lifetime >= STRENGTH_ACID) {
+                Particle_reset(current);
+              }
+            break;
+          }
+          w->cs[c_index] |= c_mask;
         }
+      }
     }
+  }
+
+  // reset all cell status
+  for (int i = 0; i < w->cw * w->ch; i++) {
+    w->cs[i] = 0;
+  }
 }

@@ -1,4 +1,4 @@
-#define CELL_SIZE   10.f
+#define CELL_SIZE   8   // cell size must be 8 to fit in tick status array
 
 #define PTYPE_LEN   8
 #define PTYPE_NONE  0x0
