@@ -52,7 +52,7 @@ struct ParticleProps prop_table[] = {
   { // PTYPE_WOOD
     0x110,  // flags:  flammable, dissolvable
     -1,
-    5,
+    24,
   },
   { // PTYPE_FIRE
     0x000,  // flags:  no props
@@ -67,7 +67,7 @@ struct ParticleProps prop_table[] = {
   { // PTYPE_METAL
     0x100,  // flags: dissolvable
     -1,
-    14,
+    64,
   },
   { // PTYPE_ACID
     0x000,  // flags:  no props
@@ -504,19 +504,24 @@ struct Position sim_spread_up(World w, Particle p, short x, short y) {
 }
 
 struct Position sim_dissolve(World w, Particle p, short x, short y) {
-  // search all neighbors for something dissolvable
+  // search all neighbors (below & left/right) for something dissolvable
   for (int i = x - 1; i <= x + 1; i++) {
-    for (int j = y - 1; j <= y + 1; j++) {
+    for (int j = y; j <= y + 1; j++) {
       // skip out of bounds
       if (i < 0 || i >= w->w || j < 0 || j >= w->h) {
         continue;
       }
 
+      // skip over your own self
+      if (i == x && j == y) {
+        continue;
+      }
+
       Particle neighbor = World_getParticle(w, i, j);
 
-      if (IS_DISSOLVABLE(neighbor->type)) {
-        neighbor->type = PTYPE_NONE; // dissolves instantly
-        p->energy -= 1; // decrease energy
+      if (IS_DISSOLVABLE(neighbor->type) &&
+          neighbor->durability > 0) {
+        neighbor->durability -= 1; // decrease neighbor's durability
       }
     }
   }
@@ -557,41 +562,39 @@ void World_simulate(World w) {
             continue;
           }
 
-          struct Position new_pos;
+          struct Position pos = {i, j};
           // simulate each particle type appropriately
           switch (current->type) {
             case PTYPE_SAND:
-              new_pos = sim_fall(w, current, i, j);
+              pos = sim_fall(w, current, pos.x, pos.y);
             break;
             case PTYPE_WATER:
-              new_pos = sim_fall(w, current, i, j);
-              if (new_pos.x == i && new_pos.y == j) { // if falling failed
-                new_pos = sim_spread(w, current, new_pos.x, new_pos.y);
+              pos = sim_fall(w, current, pos.x, pos.y);
+              if (pos.x == i && pos.y == j) { // if falling failed
+                pos = sim_spread(w, current, pos.x, pos.y);
               }
             break;
             case PTYPE_WOOD:
               // empty: wood does nothing
-              new_pos = (struct Position){i, j};
             break;
             case PTYPE_FIRE:
-              World_activateCell(w, i, j);
+              World_activateCell(w, pos.x, pos.y);
               current->energy -= 1;
-              new_pos = sim_burn(w, current, i, j);
+              pos = sim_burn(w, current, pos.x, pos.y);
             break;
             case PTYPE_SMOKE:
-              new_pos = sim_spread_up(w, current, i, j);
+              pos = sim_spread_up(w, current, pos.x, pos.y);
             break;
             case PTYPE_METAL:
               // empty: metal does nothing
-              new_pos = (struct Position){i, j};
             break;
             case PTYPE_ACID:
               // behave like water
-              new_pos = sim_fall(w, current, i, j);
-              if (new_pos.x == i && new_pos.y == j) { // if falling failed
-                new_pos = sim_spread(w, current, new_pos.x, new_pos.y);
+              pos = sim_fall(w, current, pos.x, pos.y);
+              if (pos.x == i && pos.y == j) { // if falling failed
+                pos = sim_spread(w, current, pos.x, pos.y);
               }
-              new_pos = sim_dissolve(w, current, new_pos.x, new_pos.y);
+              pos = sim_dissolve(w, current, pos.x, pos.y);
             break;
           }
 
@@ -601,10 +604,10 @@ void World_simulate(World w) {
           }
 
           // mark new particle position as ticked
-          int new_cx = new_pos.x / CELL_SIZE;
-          int new_cy = new_pos.y / CELL_SIZE;
-          int new_rx = new_pos.x % CELL_SIZE; // relative x in cell
-          int new_ry = new_pos.y % CELL_SIZE; // relative y in cell
+          int new_cx = pos.x / CELL_SIZE;
+          int new_cy = pos.y / CELL_SIZE;
+          int new_rx = pos.x % CELL_SIZE; // relative x in cell
+          int new_ry = pos.y % CELL_SIZE; // relative y in cell
           unsigned long new_c_mask = ((long)0x1) << (new_ry * CELL_SIZE + new_rx);
 
           int new_c_index = new_cy * w->ch + new_cx;
