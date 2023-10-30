@@ -17,7 +17,7 @@
 
 struct Particle {
   char type;
-  char lastSpreadDir;
+  char spreadDir;
   short lifetime;
   float vel;
   float spreadVel;
@@ -86,7 +86,7 @@ Particle new_Particle(char type) {
   this->type = type;
   this->vel = START_VEL;
   this->spreadVel = START_SPREAD;
-  this->lastSpreadDir = randBoolean() ? SPREAD_LEFT : SPREAD_RIGHT;
+  this->spreadDir = randBoolean() ? SPREAD_LEFT : SPREAD_RIGHT;
   this->lifetime = 0;
 
   this->saturation = randFloatRange(0.8f, 1.f);
@@ -102,7 +102,7 @@ void Particle_setType(Particle p, char type) {
 }
 
 char Particle_getLastSpreadDir(Particle p) {
-  return p->lastSpreadDir;
+  return p->spreadDir;
 }
 
 float Particle_getSaturation(Particle p) {
@@ -113,7 +113,7 @@ void Particle_reset(Particle p) {
   p->type = PTYPE_NONE;
   p->vel = START_VEL;
   p->spreadVel = START_SPREAD;
-  p->lastSpreadDir = SPREAD_LEFT;
+  p->spreadDir = randBoolean() ? SPREAD_LEFT : SPREAD_RIGHT;
   p->lifetime = 0;
 }
 
@@ -180,8 +180,8 @@ short World_getCellHeight(World w) {
 }
 
 void World_activateCell(World w, short x, short y) {
-    short cx = (short)floor(x / CELL_SIZE);
-    short cy = (short)floor(y / CELL_SIZE);
+    short cx = x / CELL_SIZE;
+    short cy = y / CELL_SIZE;
 
     short i = cy * w->cw + cx;
     w->c[i] = 2; // 2 chances to stay active
@@ -202,8 +202,8 @@ void World_activateCell(World w, short x, short y) {
 }
 
 char World_getCellStatus(World w, short x, short y) {
-    short cx = (short)floor(x / CELL_SIZE);
-    short cy = (short)floor(y / CELL_SIZE);
+    short cx = x / CELL_SIZE;
+    short cy = y / CELL_SIZE;
 
     return w->c[cy * w->cw + cx];
 }
@@ -242,7 +242,7 @@ struct Position sim_pile(World w, Particle p, short x, short y) {
         return (struct Position){x, y};
     }
 
-    int moveY = y;
+    short moveY = y;
     for (int k = 1; k <= p->vel; k++) {
         if (y + k < w->h &&
             IS_EMPTY(World_getParticle(w, x, y + k)->type)) {
@@ -258,6 +258,7 @@ struct Position sim_pile(World w, Particle p, short x, short y) {
         p->vel = clamp(p->vel + GRAVITY_ACC, -MAX_VEL, MAX_VEL);
         return (struct Position){x, moveY};
     }
+
     else if (x > 0 && IS_EMPTY(World_getParticle(w, x - 1, y + 1)->type)) {
         World_swapParticle(w, x, y, x - 1, y + 1);
         p->vel = START_VEL;
@@ -311,9 +312,13 @@ struct Position sim_fall(World w, Particle p, short x, short y) {
     }
 
     // begin with the last spread direction
-    int dx = x + p->lastSpreadDir;
+    int dx = x + p->spreadDir;
     for (int i = 0; i <= 1; i++) {
       if (dx < 0 || dx >= w->w) {
+        break;
+      }
+
+      if (dy + 1 < w->h && IS_EMPTY(World_getParticle(w, dx, dy + 1)->type)) {
         break;
       }
 
@@ -323,7 +328,7 @@ struct Position sim_fall(World w, Particle p, short x, short y) {
         besty = dy;
       }
       // check other direction for second iteration
-      dx = x - p->lastSpreadDir;
+      dx = x - p->spreadDir;
     }
   }
 
@@ -338,62 +343,61 @@ struct Position sim_fall(World w, Particle p, short x, short y) {
 }
 
 struct Position sim_spread(World w, Particle p, short x, short y) {
-    // spread left if right is occupied
-    if (x >= w->w - 1 || // right is out of bounds
-        x < w->w - 1 && !(IS_EMPTY(World_getParticle(w, x + 1, y)->type)) // right is occupied
-        ) {
-      p->lastSpreadDir = SPREAD_LEFT;
+  char left_blocked = x <= 0 || !(IS_EMPTY(World_getParticle(w, x - 1, y)->type));
+  char right_blocked = x >= w->w - 1 || !(IS_EMPTY(World_getParticle(w, x + 1, y)->type));
+
+  // spread left if right is occupied & left is not
+  if (right_blocked && !left_blocked) {
+    p->spreadDir = SPREAD_LEFT;
+  }
+
+  // spread right if left is occupied & right is not
+  if (left_blocked && !right_blocked) {
+    p->spreadDir = SPREAD_RIGHT;
+  }
+
+  // try to move in spread direction
+  int movex = x;
+  for (int k = 1; k <= p->spreadVel; k++) {
+    int try_pos = x + p->spreadDir * k;
+
+    // moving left but that is out of bounds
+    if (p->spreadDir == SPREAD_LEFT &&
+        try_pos <= 0) {
+      p->spreadDir = SPREAD_RIGHT;
+      break;
     }
 
-    // spread right if left is occupied
-    if (x <= 0 || // left is out of bounds
-        x > 0 && !(IS_EMPTY(World_getParticle(w, x - 1, y)->type)) // left is occupied
-        ) {
-      p->lastSpreadDir = SPREAD_RIGHT;
+    // moving right but that is out of bounds
+    if (p->spreadDir == SPREAD_RIGHT &&
+        try_pos >= w->w - 1) {
+      p->spreadDir = SPREAD_LEFT;
+      break;
     }
 
-    // try to move in spread direction
-    int movex = x;
-    for (int k = 1; k <= 1/*p->spreadVel*/; k++) {
-      int try_pos = x + p->lastSpreadDir * k;
-
-      // moving left but that is out of bounds
-      if (p->lastSpreadDir == SPREAD_LEFT &&
-          try_pos <= 0) {
-        p->lastSpreadDir = SPREAD_RIGHT;
-        break;
-      }
-
-      // moving right but that is out of bounds
-      if (p->lastSpreadDir == SPREAD_RIGHT &&
-          try_pos >= w->w - 1) {
-        p->lastSpreadDir = SPREAD_LEFT;
-        break;
-      }
-
-      // can move again
-      if (IS_EMPTY(World_getParticle(w, try_pos, y)->type)) {
-        movex = try_pos;
-      }
-      // cannot move anywhere
-      else {
-        break;
-      }
+    // can move again
+    if (IS_EMPTY(World_getParticle(w, try_pos, y)->type)) {
+      movex = try_pos;
     }
-
-    // found a move
-    if (movex != x)
-    {
-      World_swapParticle(w, x, y, movex, y);
-      p->vel = START_VEL;
-      p->spreadVel = clamp(p->spreadVel + SPREAD_ACC, 0, MAX_SPREAD);
-      return (struct Position){movex, y};
+    // cannot move anywhere
+    else {
+      break;
     }
+  }
 
-    // no move
+  // found a move
+  if (movex != x)
+  {
+    World_swapParticle(w, x, y, movex, y);
     p->vel = START_VEL;
-    p->spreadVel = START_VEL;
-    return (struct Position){x, y};
+    p->spreadVel = clamp(p->spreadVel + SPREAD_ACC, 0, MAX_SPREAD);
+    return (struct Position){movex, y};
+  }
+
+  // no move
+  p->vel = START_VEL;
+  p->spreadVel = START_VEL;
+  return (struct Position){x, y};
 }
 
 struct Position sim_burn(World w, Particle p, short x, short y) {
@@ -430,8 +434,8 @@ struct Position sim_burn(World w, Particle p, short x, short y) {
                 if (randFloat() > 0.2) {
                     continue;
                 }
-                // else, 20% chance to make smoke
-                else if (randFloat() < 0.2) {
+                // else, 10% chance to make smoke
+                else if (randFloat() < 0.10) {
                     Particle above = World_getParticle(w, i, j);
                     above->lifetime = 0;
                     above->type = PTYPE_SMOKE;
@@ -522,8 +526,8 @@ void World_simulate(World w) {
           Particle current = World_getParticle(w, i, j);
 
           // find particle in cell map
-          int rx = i - ci * CELL_SIZE; // relative x in cell
-          int ry = j - cj * CELL_SIZE; // relative y in cell
+          int rx = i % CELL_SIZE; // relative x in cell
+          int ry = j % CELL_SIZE; // relative y in cell
           unsigned long c_mask = ((long)0x1) << (ry * CELL_SIZE + rx);
 
           // check if particle ticked
@@ -538,8 +542,10 @@ void World_simulate(World w) {
               new_pos = sim_fall(w, current, i, j);
             break;
             case PTYPE_WATER:
-              //sim_fall(w, current, i, j);
-              new_pos = sim_spread(w, current, i, j);
+              new_pos = sim_fall(w, current, i, j);
+              if (new_pos.x == i && new_pos.y == j) { // if falling failed
+                new_pos = sim_spread(w, current, new_pos.x, new_pos.y);
+              }
             break;
             case PTYPE_WOOD:
               // empty: wood does nothing
@@ -580,9 +586,8 @@ void World_simulate(World w) {
           // mark new particle position as ticked
           int new_cx = new_pos.x / CELL_SIZE;
           int new_cy = new_pos.y / CELL_SIZE;
-          // TODO: can i just % CELL_SIZE??
-          int new_rx = new_pos.x - new_cx * CELL_SIZE; // relative x in cell
-          int new_ry = new_pos.y - new_cx * CELL_SIZE; // relative y in cell
+          int new_rx = new_pos.x % CELL_SIZE; // relative x in cell
+          int new_ry = new_pos.y % CELL_SIZE; // relative y in cell
           unsigned long new_c_mask = ((long)0x1) << (new_ry * CELL_SIZE + new_rx);
 
           int new_c_index = new_cy * w->ch + new_cx;

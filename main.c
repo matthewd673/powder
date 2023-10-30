@@ -8,10 +8,10 @@
 #define WINDOW_HEIGHT   800
 #define WINDOW_FPS      120
 
-#define WORLD_WIDTH     800
-#define WORLD_HEIGHT    800
+#define WORLD_WIDTH     400
+#define WORLD_HEIGHT    400
 
-#define PARTICLE_SCALE  1
+#define PARTICLE_SCALE  2
 
 // rendering color map
 struct Color color_map[] = {
@@ -142,17 +142,17 @@ int main(int argc, char *argv[]) {
             col.b *= Particle_getSaturation(p);
 
             // DEBUGGING: visualizing water spread direction
-            if (Particle_getType(p) == PTYPE_WATER &&
-                Particle_getLastSpreadDir(p) == SPREAD_LEFT) {
-              col.r = 0;
-              col.g = 0;
-              col.b = 255;
-            }
-            else if (Particle_getType(p) == PTYPE_WATER) {
-              col.r = 255;
-              col.g = 0;
-              col.b = 0;
-            }
+//            if (Particle_getType(p) == PTYPE_SAND &&
+//                Particle_getLastSpreadDir(p) == SPREAD_LEFT) {
+//              col.r = 0;
+//              col.g = 0;
+//              col.b = 255;
+//            }
+//            else if (Particle_getType(p) == PTYPE_SAND) {
+//              col.r = 255;
+//              col.g = 0;
+//              col.b = 0;
+//            }
 
             DrawRectangle(i * PARTICLE_SCALE, -j * PARTICLE_SCALE + WINDOW_HEIGHT,
                           PARTICLE_SCALE, PARTICLE_SCALE,
