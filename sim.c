@@ -12,13 +12,12 @@
 #define START_SPREAD    1.f
 #define MAX_SPREAD      3.f
 
-#define LIFETIME_FIRE   24
-#define STRENGTH_ACID   3
-
 struct Particle {
   char type;
+  short energy;
+  short durability;
+
   char spreadDir;
-  short lifetime;
   float vel;
   float spreadVel;
   float saturation;
@@ -26,6 +25,8 @@ struct Particle {
 
 struct ParticleProps {
   short flags;
+  short energy;
+  short durability;
 };
 
 #define IS_EMPTY(p)        (prop_table[p].flags & 0x1)
@@ -35,27 +36,43 @@ struct ParticleProps {
 struct ParticleProps prop_table[] = {
   { // PTYPE_NONE
     0x001,  // flags:  empty
+    -1,
+    -1,
   },
   { // PTYPE_SAND
     0x000,  // flags:  no props
+    -1,
+    -1,
   },
   { // PTYPE_WATER
     0x000,  // flags: no props
+    -1,
+    -1,
   },
   { // PTYPE_WOOD
     0x110,  // flags:  flammable, dissolvable
+    -1,
+    5,
   },
   { // PTYPE_FIRE
     0x000,  // flags:  no props
+    24,
+    -1,
   },
   { // PTYPE_SMOKE
     0x001,  // flags: no props
+    -1,
+    -1,
   },
   { // PTYPE_METAL
     0x100,  // flags: dissolvable
+    -1,
+    14,
   },
   { // PTYPE_ACID
     0x000,  // flags:  no props
+    -1,
+    -1,
   },
 };
 
@@ -84,10 +101,12 @@ Particle new_Particle(char type) {
   }
 
   this->type = type;
+  this->energy = prop_table[type].energy;
+  this->durability = prop_table[type].durability;
+
   this->vel = START_VEL;
   this->spreadVel = START_SPREAD;
   this->spreadDir = randBoolean() ? SPREAD_LEFT : SPREAD_RIGHT;
-  this->lifetime = 0;
 
   this->saturation = randFloatRange(0.8f, 1.f);
 
@@ -99,6 +118,8 @@ char Particle_getType(Particle p) {
 }
 void Particle_setType(Particle p, char type) {
   p->type = type;
+  p->energy = prop_table[p->type].energy;
+  p->durability = prop_table[p->type].durability;
 }
 
 char Particle_getLastSpreadDir(Particle p) {
@@ -111,10 +132,12 @@ float Particle_getSaturation(Particle p) {
 
 void Particle_reset(Particle p) {
   p->type = PTYPE_NONE;
+  p->energy = prop_table[PTYPE_NONE].energy;
+  p->durability = prop_table[PTYPE_NONE].durability;
+
   p->vel = START_VEL;
   p->spreadVel = START_SPREAD;
   p->spreadDir = randBoolean() ? SPREAD_LEFT : SPREAD_RIGHT;
-  p->lifetime = 0;
 }
 
 World new_World(short width, short height) {
@@ -401,57 +424,56 @@ struct Position sim_spread(World w, Particle p, short x, short y) {
 }
 
 struct Position sim_burn(World w, Particle p, short x, short y) {
-    char spread = 0;
-    for (int i = x - 1; i <= x + 1; i++) {
-        for (int j = y - 1; j <= y + 1; j++) {
+  char spread = 0;
+  for (int i = x - 1; i <= x + 1; i++) {
+    for (int j = y - 1; j <= y + 1; j++) {
+      if (i < 0 || i >= w->w || j < 0 || j >= w->h) {
+        continue;
+      }
 
-            if (i < 0 || i >= w->w || j < 0 || j >= w->h) {
-                continue;
-            }
+      Particle neighbor = World_getParticle(w, i, j);
 
-            Particle neighbor = World_getParticle(w, i, j);
-
-            if (IS_FLAMMABLE(neighbor->type)) {
-                // wait to spread
-                if (p->lifetime < LIFETIME_FIRE / 2) {
-                    continue;
-                }
-                // random chance to spread (50%)
-                if (randFloat() > 0.5f) {
-                    continue;
-                }
-                neighbor->type = PTYPE_FIRE;
-                neighbor->lifetime = 0;
-                spread = spread | 0x1;
-            }
-            else if (IS_EMPTY(neighbor->type)) {
-                // only upwards
-                if (j >= y) {
-                    continue;
-                }
-
-                // 20% chance to spread
-                if (randFloat() > 0.2) {
-                    continue;
-                }
-                // else, 10% chance to make smoke
-                else if (randFloat() < 0.10) {
-                    Particle above = World_getParticle(w, i, j);
-                    above->lifetime = 0;
-                    above->type = PTYPE_SMOKE;
-                }
-
-                spread = spread | 0x2;
-                World_swapParticle(w, x, y, i, j);
-            }
+      if (IS_FLAMMABLE(neighbor->type)) {
+        // wait to spread
+        if (p->energy >= prop_table[p->type].energy / 2) {
+          continue;
         }
-    }
+        // random chance to spread (50%)
+        if (randFloat() > 0.5f) {
+          continue;
+        }
+        neighbor->type = p->type;
+        neighbor->energy = prop_table[neighbor->type].energy;
+        spread = spread | 0x1; // mark as spread to flammable material
+      }
+      else if (IS_EMPTY(neighbor->type)) {
+        // only upwards
+        if (j >= y) {
+          continue;
+        }
 
-    if (spread & 0x1) { // spread to wood
-        p->lifetime = 0;
-    }
+        // 20% chance to spread
+        if (randFloat() > 0.2) {
+          continue;
+        }
+        // else, 2% chance to make smoke
+        else if (randFloat() <= 0.02) {
+          Particle above = World_getParticle(w, i, j);
+          above->type = PTYPE_SMOKE;
+          above->energy = prop_table[above->type].energy;
+        }
 
-    return (struct Position){x, y};
+        spread = spread | 0x10; // mark as made smoke
+        World_swapParticle(w, x, y, i, j);
+      }
+    }
+  }
+
+  if (spread & 0x1) { // spread to something flammable
+    p->energy = prop_table[p->type].energy;
+  }
+
+  return (struct Position){x, y};
 }
 
 struct Position sim_spread_up(World w, Particle p, short x, short y) {
@@ -494,7 +516,7 @@ struct Position sim_dissolve(World w, Particle p, short x, short y) {
 
       if (IS_DISSOLVABLE(neighbor->type)) {
         neighbor->type = PTYPE_NONE; // dissolves instantly
-        p->lifetime++; // increase "lifetime"
+        p->energy -= 1; // decrease energy
       }
     }
   }
@@ -553,10 +575,7 @@ void World_simulate(World w) {
             break;
             case PTYPE_FIRE:
               World_activateCell(w, i, j);
-              current->lifetime++;
-              if (current->lifetime >= LIFETIME_FIRE) {
-                Particle_reset(current);
-              }
+              current->energy -= 1;
               new_pos = sim_burn(w, current, i, j);
             break;
             case PTYPE_SMOKE:
@@ -568,19 +587,17 @@ void World_simulate(World w) {
             break;
             case PTYPE_ACID:
               // behave like water
-              /*
-              if (!sim_pile(w, current, i, j)) {
-                sim_spread(w, current, i, j);
+              new_pos = sim_fall(w, current, i, j);
+              if (new_pos.x == i && new_pos.y == j) { // if falling failed
+                new_pos = sim_spread(w, current, new_pos.x, new_pos.y);
               }
-              sim_dissolve(w, current, i, j);
-              */
-
-              // TODO: better acid behavior
-              // lifetime is based on amount of things dissolved
-              if (current->lifetime >= STRENGTH_ACID) {
-                Particle_reset(current);
-              }
+              new_pos = sim_dissolve(w, current, new_pos.x, new_pos.y);
             break;
+          }
+
+          if (current->energy == 0 ||
+              current->durability == 0) {
+            Particle_reset(current);
           }
 
           // mark new particle position as ticked
