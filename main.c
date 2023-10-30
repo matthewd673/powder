@@ -142,13 +142,13 @@ int main(int argc, char *argv[]) {
             col.b *= Particle_getSaturation(p);
 
             // DEBUGGING: visualizing water spread direction
-//            if (Particle_getType(p) == PTYPE_SAND &&
+//            if (Particle_getType(p) == PTYPE_SMOKE &&
 //                Particle_getLastSpreadDir(p) == SPREAD_LEFT) {
 //              col.r = 0;
 //              col.g = 0;
 //              col.b = 255;
 //            }
-//            else if (Particle_getType(p) == PTYPE_SAND) {
+//            else if (Particle_getType(p) == PTYPE_SMOKE) {
 //              col.r = 255;
 //              col.g = 0;
 //              col.b = 0;

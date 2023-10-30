@@ -17,9 +17,9 @@ struct Particle {
   short energy;
   short durability;
 
-  char spreadDir;
   float vel;
-  float spreadVel;
+  char spread_dir;
+  float spread_vel;
   float saturation;
 };
 
@@ -114,8 +114,8 @@ Particle new_Particle(char type) {
   this->durability = prop_table[type].durability;
 
   this->vel = START_VEL;
-  this->spreadVel = START_SPREAD;
-  this->spreadDir = randBoolean() ? SPREAD_LEFT : SPREAD_RIGHT;
+  this->spread_vel = START_SPREAD;
+  this->spread_dir = randBoolean() ? SPREAD_LEFT : SPREAD_RIGHT;
 
   this->saturation = randFloatRange(prop_table[type].min_saturation, 1.f);
 
@@ -133,7 +133,7 @@ void Particle_setType(Particle p, char type) {
 }
 
 char Particle_getLastSpreadDir(Particle p) {
-  return p->spreadDir;
+  return p->spread_dir;
 }
 
 float Particle_getSaturation(Particle p) {
@@ -146,8 +146,8 @@ void Particle_reset(Particle p) {
   p->durability = prop_table[PTYPE_NONE].durability;
 
   p->vel = START_VEL;
-  p->spreadVel = START_SPREAD;
-  p->spreadDir = randBoolean() ? SPREAD_LEFT : SPREAD_RIGHT;
+  p->spread_vel = START_SPREAD;
+  p->spread_dir = randBoolean() ? SPREAD_LEFT : SPREAD_RIGHT;
 }
 
 World new_World(short width, short height) {
@@ -270,45 +270,6 @@ void World_swapParticle(World w, short x1, short y1, short x2, short y2) {
     w->p[y2 * w->w + x2] = temp;
 }
 
-struct Position sim_pile(World w, Particle p, short x, short y) {
-    if (y == w->h - 1) {
-        return (struct Position){x, y};
-    }
-
-    short moveY = y;
-    for (int k = 1; k <= p->vel; k++) {
-        if (y + k < w->h &&
-            IS_EMPTY(World_getParticle(w, x, y + k)->type)) {
-                moveY = y + k;
-            }
-        else {
-            break;
-        }
-    }
-    // MOVE INTO PILE
-    if (moveY != y) {
-        World_swapParticle(w, x, y, x, moveY);
-        p->vel = clamp(p->vel + GRAVITY_ACC, -MAX_VEL, MAX_VEL);
-        return (struct Position){x, moveY};
-    }
-
-    else if (x > 0 && IS_EMPTY(World_getParticle(w, x - 1, y + 1)->type)) {
-        World_swapParticle(w, x, y, x - 1, y + 1);
-        p->vel = START_VEL;
-        return (struct Position){x - 1, y + 1};
-    }
-    else if (x < w->w - 1 && IS_EMPTY(World_getParticle(w, x + 1, y + 1)->type)) {
-        World_swapParticle(w, x, y, x + 1, y + 1);
-        p->vel = START_VEL;
-        return (struct Position){x + 1, y + 1};
-    }
-    // NO MOVE
-    else {
-        p->vel = START_VEL;
-        return (struct Position){x, y};
-    }
-}
-
 struct Position sim_fall(World w, Particle p, short x, short y) {
   if (y == w->h -1) {
     return (struct Position){x, y};
@@ -345,7 +306,7 @@ struct Position sim_fall(World w, Particle p, short x, short y) {
     }
 
     // begin with the last spread direction
-    int dx = x + p->spreadDir;
+    int dx = x + p->spread_dir;
     for (int i = 0; i <= 1; i++) {
       if (dx < 0 || dx >= w->w) {
         break;
@@ -361,7 +322,7 @@ struct Position sim_fall(World w, Particle p, short x, short y) {
         besty = dy;
       }
       // check other direction for second iteration
-      dx = x - p->spreadDir;
+      dx = x - p->spread_dir;
     }
   }
 
@@ -381,30 +342,30 @@ struct Position sim_spread(World w, Particle p, short x, short y) {
 
   // spread left if right is occupied & left is not
   if (right_blocked && !left_blocked) {
-    p->spreadDir = SPREAD_LEFT;
+    p->spread_dir = SPREAD_LEFT;
   }
 
   // spread right if left is occupied & right is not
   if (left_blocked && !right_blocked) {
-    p->spreadDir = SPREAD_RIGHT;
+    p->spread_dir = SPREAD_RIGHT;
   }
 
   // try to move in spread direction
   int movex = x;
-  for (int k = 1; k <= p->spreadVel; k++) {
-    int try_pos = x + p->spreadDir * k;
+  for (int k = 1; k <= p->spread_vel; k++) {
+    int try_pos = x + p->spread_dir * k;
 
     // moving left but that is out of bounds
-    if (p->spreadDir == SPREAD_LEFT &&
+    if (p->spread_dir == SPREAD_LEFT &&
         try_pos <= 0) {
-      p->spreadDir = SPREAD_RIGHT;
+      p->spread_dir = SPREAD_RIGHT;
       break;
     }
 
     // moving right but that is out of bounds
-    if (p->spreadDir == SPREAD_RIGHT &&
+    if (p->spread_dir == SPREAD_RIGHT &&
         try_pos >= w->w - 1) {
-      p->spreadDir = SPREAD_LEFT;
+      p->spread_dir = SPREAD_LEFT;
       break;
     }
 
@@ -423,13 +384,13 @@ struct Position sim_spread(World w, Particle p, short x, short y) {
   {
     World_swapParticle(w, x, y, movex, y);
     p->vel = START_VEL;
-    p->spreadVel = clamp(p->spreadVel + SPREAD_ACC, 0, MAX_SPREAD);
+    p->spread_vel = clamp(p->spread_vel + SPREAD_ACC, 0, MAX_SPREAD);
     return (struct Position){movex, y};
   }
 
   // no move
   p->vel = START_VEL;
-  p->spreadVel = START_VEL;
+  p->spread_vel = START_VEL;
   return (struct Position){x, y};
 }
 
@@ -486,31 +447,104 @@ struct Position sim_burn(World w, Particle p, short x, short y) {
   return (struct Position){x, y};
 }
 
-struct Position sim_spread_up(World w, Particle p, short x, short y) {
-    // attempt to go up
-    if (y > 0 &&
-        IS_EMPTY(World_getParticle(w, x, y - 1)->type) && // empty space
-        World_getParticle(w, x, y - 1)->type != p->type // not swapping with same type
-        ) {
-        World_swapParticle(w, x, y, x, y - 1);
-        return (struct Position){x, y - 1};
-    }
-
-    // if already at top, "keep floating up" (clear smoke)
-    if (y == 0) {
-        Particle_reset(p);
-    }
-    // try to spread
-    else if (x > 0 && IS_EMPTY(World_getParticle(w, x - 1, y)->type)) {
-        World_swapParticle(w, x, y, x - 1, y);
-        return (struct Position){x - 1, y};
-    }
-    else if (x < w->w - 1 && IS_EMPTY(World_getParticle(w, x + 1, y)->type)) {
-        World_swapParticle(w, x, y, x + 1, y);
-        return (struct Position){x + 1, y};
-    }
-
+struct Position sim_fall_up(World w, Particle p, short x, short y) {
+  // top of screen, "keep moving up" (clear smoke)
+  if (y == 0) {
+    Particle_reset(p);
     return (struct Position){x, y};
+  }
+
+  // try to move up at velocity
+  int movey = y;
+  for (int k = -1; k <= -1; k++) { // TODO: temp
+    if (y + k < w->h &&
+        IS_EMPTY(World_getParticle(w, x, y + k)->type) && // move into empty
+        World_getParticle(w, x, y + k)->type != p->type   // don't move into your own type
+       ) {
+      movey = y + k;
+    }
+    else {
+      break;
+    }
+  }
+
+  // made a move up
+  if (movey != y) {
+    World_swapParticle(w, x, y, x, movey);
+    p->vel = clamp(p->vel + GRAVITY_ACC, -MAX_VEL, MAX_VEL);
+    return (struct Position){x, movey};
+  }
+
+  // did nothing
+  return (struct Position){x, movey};
+}
+
+struct Position sim_spread_gas(World w, Particle p, short x, short y) {
+  char left_blocked = x <= 0 || !(IS_EMPTY(World_getParticle(w, x - 1, y)->type));
+  char right_blocked = x >= w->w - 1 || !(IS_EMPTY(World_getParticle(w, x + 1, y)->type));
+
+  // random chance to switch direction
+  if (randFloat() <= 0.02f) {
+    p->spread_dir = -p->spread_dir;
+  }
+
+  // spread left if right is occupied & left is not
+  if (right_blocked && !left_blocked) {
+    p->spread_dir = SPREAD_LEFT;
+  }
+
+  // spread right if left is occupied & right is not
+  if (left_blocked && !right_blocked) {
+    p->spread_dir = SPREAD_RIGHT;
+  }
+
+  // chance to not try to spread
+  if (randFloat() <= 0.85f) {
+    return (struct Position){x, y};
+  }
+
+  // try to move in spread direction
+  int movex = x;
+  for (int k = 1; k <= 1; k++) {
+    int try_pos = x + p->spread_dir * k;
+
+    // moving left but that is out of bounds
+    if (p->spread_dir == SPREAD_LEFT &&
+        try_pos <= 0) {
+      p->spread_dir = SPREAD_RIGHT;
+      break;
+    }
+
+    // moving right but that is out of bounds
+    if (p->spread_dir == SPREAD_RIGHT &&
+        try_pos >= w->w - 1) {
+      p->spread_dir = SPREAD_LEFT;
+      break;
+    }
+
+    // can move again
+    if (IS_EMPTY(World_getParticle(w, try_pos, y)->type)) {
+      movex = try_pos;
+    }
+    // cannot move anywhere
+    else {
+      break;
+    }
+  }
+
+  // found a move
+  if (movex != x)
+  {
+    World_swapParticle(w, x, y, movex, y);
+    p->vel = START_VEL;
+    p->spread_vel = clamp(p->spread_vel + SPREAD_ACC, 0, MAX_SPREAD);
+    return (struct Position){movex, y};
+  }
+
+  // no move
+  p->vel = START_VEL;
+  p->spread_vel = START_VEL;
+  return (struct Position){x, y};
 }
 
 struct Position sim_dissolve(World w, Particle p, short x, short y) {
@@ -531,6 +565,7 @@ struct Position sim_dissolve(World w, Particle p, short x, short y) {
 
       if (IS_DISSOLVABLE(neighbor->type) &&
           neighbor->durability > 0) {
+        World_activateCell(w, i, j);
         neighbor->durability -= 1; // decrease neighbor's durability
       }
     }
@@ -593,7 +628,8 @@ void World_simulate(World w) {
               pos = sim_burn(w, current, pos.x, pos.y);
             break;
             case PTYPE_SMOKE:
-              pos = sim_spread_up(w, current, pos.x, pos.y);
+              pos = sim_fall_up(w, current, pos.x, pos.y);
+              pos = sim_spread_gas(w, current, pos.x, pos.y);
             break;
             case PTYPE_METAL:
               // empty: metal does nothing
