@@ -27,6 +27,7 @@ struct ParticleProps {
   short flags;
   short energy;
   short durability;
+  float min_saturation;
 };
 
 #define IS_EMPTY(p)        (prop_table[p].flags & 0x1)
@@ -38,41 +39,49 @@ struct ParticleProps prop_table[] = {
     0x001,  // flags:  empty
     -1,
     -1,
+    0.f,
   },
   { // PTYPE_SAND
     0x000,  // flags:  no props
     -1,
     -1,
+    0.75f,
   },
   { // PTYPE_WATER
     0x000,  // flags: no props
     -1,
     -1,
+    0.9f,
   },
   { // PTYPE_WOOD
     0x110,  // flags:  flammable, dissolvable
     -1,
     24,
+    0.8f,
   },
   { // PTYPE_FIRE
     0x000,  // flags:  no props
     24,
     -1,
+    0.4f,
   },
   { // PTYPE_SMOKE
     0x001,  // flags: no props
     -1,
     -1,
+    0.75f,
   },
   { // PTYPE_METAL
     0x100,  // flags: dissolvable
     -1,
     64,
+    0.9f,
   },
   { // PTYPE_ACID
     0x000,  // flags:  no props
     -1,
     -1,
+    0.9f,
   },
 };
 
@@ -108,7 +117,7 @@ Particle new_Particle(char type) {
   this->spreadVel = START_SPREAD;
   this->spreadDir = randBoolean() ? SPREAD_LEFT : SPREAD_RIGHT;
 
-  this->saturation = randFloatRange(0.8f, 1.f);
+  this->saturation = randFloatRange(prop_table[type].min_saturation, 1.f);
 
   return this;
 }
@@ -120,6 +129,7 @@ void Particle_setType(Particle p, char type) {
   p->type = type;
   p->energy = prop_table[p->type].energy;
   p->durability = prop_table[p->type].durability;
+  p->saturation = randFloatRange(prop_table[type].min_saturation, 1.f);
 }
 
 char Particle_getLastSpreadDir(Particle p) {
@@ -442,7 +452,7 @@ struct Position sim_burn(World w, Particle p, short x, short y) {
         if (randFloat() > 0.5f) {
           continue;
         }
-        neighbor->type = p->type;
+        Particle_setType(neighbor, p->type);
         neighbor->energy = prop_table[neighbor->type].energy;
         spread = spread | 0x1; // mark as spread to flammable material
       }
