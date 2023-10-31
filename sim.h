@@ -1,14 +1,17 @@
 #define CELL_SIZE   8   // cell size must be 8 to fit in tick status array
 
-#define PTYPE_LEN   8
-#define PTYPE_NONE  0x0
-#define PTYPE_SAND  0x1
-#define PTYPE_WATER 0x2
-#define PTYPE_WOOD  0x3
-#define PTYPE_FIRE  0x4
-#define PTYPE_SMOKE 0x5
-#define PTYPE_METAL 0x6
-#define PTYPE_ACID  0x7
+#define PTYPE_LEN   11
+#define PTYPE_NONE  0
+#define PTYPE_SAND  1
+#define PTYPE_WATER 2
+#define PTYPE_WOOD  3
+#define PTYPE_FIRE  4
+#define PTYPE_SMOKE 5
+#define PTYPE_METAL 6
+#define PTYPE_ACID  7
+#define PTYPE_DIRT  8
+#define PTYPE_SEED  9
+#define PTYPE_PLANT 10
 
 #define SPREAD_LEFT   -1
 #define SPREAD_RIGHT  1

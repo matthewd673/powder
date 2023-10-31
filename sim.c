@@ -10,7 +10,7 @@
 #define MAX_VEL         9.8f
 #define SPREAD_ACC      .0157f
 #define START_SPREAD    1.f
-#define MAX_SPREAD      3.f
+#define MAX_SPREAD      1.5f
 
 struct Particle {
   char type;
@@ -34,6 +34,10 @@ struct ParticleProps {
 #define IS_FLAMMABLE(p)    (prop_table[p].flags & 0x10)
 #define IS_DISSOLVABLE(p)  (prop_table[p].flags & 0x100)
 
+#define SEED_ENERGY_CAN_SEED    3
+#define SEED_ENERGY_CAN_SPROUT  2
+#define SEED_ENERGY_DEPLETED    1
+
 struct ParticleProps prop_table[] = {
   { // PTYPE_NONE
     0x001,  // flags:  empty
@@ -54,13 +58,13 @@ struct ParticleProps prop_table[] = {
     0.9f,
   },
   { // PTYPE_WOOD
-    0x110,  // flags:  flammable, dissolvable
+    0x110,  // flags: flammable, dissolvable
     -1,
     24,
     0.8f,
   },
   { // PTYPE_FIRE
-    0x000,  // flags:  no props
+    0x000,  // flags: no props
     24,
     -1,
     0.4f,
@@ -78,9 +82,27 @@ struct ParticleProps prop_table[] = {
     0.9f,
   },
   { // PTYPE_ACID
-    0x000,  // flags:  no props
+    0x000,  // flags: no props
     -1,
     -1,
+    0.9f,
+  },
+  { // PTYPE_DIRT
+    0x000,  // flags: no props
+    -1,
+    -1,
+    0.75f,
+  },
+  { // PTYPE_SEED
+    0x010,  // flags: flammable
+    SEED_ENERGY_CAN_SEED,
+    1,
+    0.85f,
+  },
+  { // PTYPE_PLANT
+    0x110,  // flags: dissolvable, flammable
+    8,
+    6,
     0.9f,
   },
 };
@@ -574,6 +596,110 @@ struct Position sim_dissolve(World w, Particle p, short x, short y) {
   return (struct Position){x, y};
 }
 
+struct Position sim_seed(World w, Particle p, short x, short y) {
+  // cannot burrow any further
+  if (y == w->h - 1) {
+    return (struct Position){x, y};
+  }
+
+  // try to burrow
+  // you can burrow only in dirt surrounded by dirt horizontally
+  if (x == 0 || x == w->w - 1) { // dirt cannot be surrounded horizontally
+    return (struct Position){x, y};
+  }
+
+  Particle below = World_getParticle(w, x, y + 1);
+  for (int i = x - 1; i <= x + 1; i++) { // ensure its surrounded by dirt
+    if (below->type != PTYPE_DIRT) {
+      return (struct Position){x, y};
+    }
+  }
+
+  // only burrow if you have enough energy
+  if (p->energy < SEED_ENERGY_CAN_SEED) {
+    return (struct Position){x, y};
+  }
+
+  // burrow into dirt
+  Particle_reset(p);
+  Particle_setType(below, PTYPE_SEED);
+  below->energy = SEED_ENERGY_CAN_SPROUT;
+  World_activateCell(w, x, y + 1); // activate new cell
+
+  return (struct Position){x, y + 1};
+}
+
+struct Position sim_sprout(World w, Particle p, short x, short y) {
+  // only sprout if its the right time
+  if (p->energy != SEED_ENERGY_CAN_SPROUT) {
+    return (struct Position){x, y};
+  }
+
+  // turn into a plant
+  Particle_setType(p, PTYPE_PLANT);
+  World_activateCell(w, x, y);
+
+  return (struct Position){x, y};
+}
+
+struct Position sim_grow(World w, Particle p, short x, short y) {
+  // only grow if has energy (infinite energy means its already grown)
+  if (p->energy <= 1) {
+    return (struct Position){x, y};
+  }
+
+  // chance to wait to grow
+  if (randFloat() <= 0.98f) {
+    World_activateCell(w, x, y); // keep alive
+    return (struct Position){x, y};
+  }
+
+  short growx = x;
+  short growy = y;
+
+  // prefer to grow up
+  if (y > 0 &&
+      IS_EMPTY(World_getParticle(w, x, y - 1)->type)
+     ) {
+    growy = y - 1;
+  }
+
+  // random grow x (but bias towards straight)
+  float grow_dir = randFloat();
+  char lose_energy = randFloat() <= 0.9f;
+  if (grow_dir < 0.2f &&
+      x > 0 &&
+      IS_EMPTY(World_getParticle(w, x - 1, growy)->type)
+      ) { // left
+    growx = x - 1;
+    Particle new_sprout = World_getParticle(w, growx, growy);
+    Particle_setType(new_sprout, PTYPE_PLANT);
+    new_sprout->energy = p->energy - lose_energy;
+  }
+  else if (grow_dir > 0.8f &&
+           x < w->w - 1 &&
+           IS_EMPTY(World_getParticle(w, x + 1, growy)->type)
+           ) { // right
+    growx = x + 1;
+    Particle new_sprout = World_getParticle(w, growx, growy);
+    Particle_setType(new_sprout, PTYPE_PLANT);
+    new_sprout->energy = p->energy - lose_energy;
+  }
+  else if (IS_EMPTY(World_getParticle(w, x, growy)->type)) { // straight
+    Particle new_sprout = World_getParticle(w, growx, growy);
+    Particle_setType(new_sprout, PTYPE_PLANT);
+    new_sprout->energy = p->energy - lose_energy;
+  }
+
+  // activate cell if grew
+  if (growx != x || growy != y) {
+    World_activateCell(w, growx, growy);
+  }
+  // don't try to grow again
+  p->energy = -1;
+  return (struct Position){growx, growy};
+}
+
 void World_simulate(World w) {
   // loop through every cell
   short active_ct = 0;
@@ -641,6 +767,23 @@ void World_simulate(World w) {
                 pos = sim_spread(w, current, pos.x, pos.y);
               }
               pos = sim_dissolve(w, current, pos.x, pos.y);
+            break;
+            case PTYPE_DIRT:
+              // behave like sand
+              pos = sim_fall(w, current, pos.x, pos.y);
+            break;
+            case PTYPE_SEED:
+              // fall and then burrow
+              pos = sim_fall(w, current, pos.x, pos.y);
+              // save time on this if depleted
+              if (current->energy == SEED_ENERGY_DEPLETED) {
+                break;
+              }
+              pos = sim_seed(w, current, pos.x, pos.y);
+              pos = sim_sprout(w, current, pos.x, pos.y);
+            break;
+            case PTYPE_PLANT:
+              sim_grow(w, current, pos.x, pos.y);
             break;
           }
 
