@@ -470,7 +470,7 @@ char sim_burn(World w, Particle p, struct Position *pos) {
         if (randFloat() > 0.5f) {
           continue;
         }
-        Particle_setType(neighbor, p->type);
+        Particle_setType(neighbor, PTYPE_FIRE); // always spread as fire
         neighbor->energy = prop_table[neighbor->type].energy;
         spread = spread | 0x1; // mark as spread to flammable material
       }
