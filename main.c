@@ -26,6 +26,7 @@ struct Color color_map[] = {
   { 94, 72, 65, 255 },    // PTYPE_DIRT
   { 250, 245, 222, 255 }, // PTYPE_SEED
   { 80, 150, 75, 255 },   // PTYPE_PLANT
+  { 209, 42, 13, 255 },   // PTYPE_LAVA
 };
 
 int main(int argc, char *argv[]) {
@@ -66,6 +67,9 @@ int main(int argc, char *argv[]) {
     }
     else if (IsKeyDown(KEY_EIGHT)) {
       newParticleType = PTYPE_SEED;
+    }
+    else if (IsKeyDown(KEY_NINE)) {
+      newParticleType = PTYPE_LAVA;
     }
     else if (IsKeyDown(KEY_ZERO)) {
       newParticleType = PTYPE_NONE; // eraser

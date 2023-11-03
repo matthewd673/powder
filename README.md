@@ -14,8 +14,9 @@ cc *.c `pkg-config --libs --cflags raylib` -o powder
 
 ## Game
 
-**Particle Types:** `SAND`, `WATER`, `WOOD`, `FIRE`, `SMOKE`, `METAL`, `ACID`
+**Particle Types:** `SAND`, `WATER`, `WOOD`, `FIRE`, `SMOKE`, `METAL`, `ACID`,
+`DIRT`, `SEED`, `PLANT`, `LAVA`
 
 Left mouse button: place particles
 
-Digit keys (1-6): change particle type
+Digit keys (1-9): change particle type

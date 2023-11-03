@@ -27,12 +27,14 @@ struct ParticleProps {
   short flags;
   short energy;
   short durability;
+  short damage;
   float min_saturation;
 };
 
-#define IS_EMPTY(p)        (prop_table[p].flags & 0x1)
-#define IS_FLAMMABLE(p)    (prop_table[p].flags & 0x10)
-#define IS_DISSOLVABLE(p)  (prop_table[p].flags & 0x100)
+#define IS_EMPTY(p)         (prop_table[p].flags & 0x1)
+#define IS_FLAMMABLE(p)     (prop_table[p].flags & 0x10)
+#define IS_DISSOLVABLE(p)   (prop_table[p].flags & 0x100)
+#define IS_MELTABLE(p)      (prop_table[p].flags & 0x1000)
 
 #define SEED_ENERGY_CAN_SEED    3
 #define SEED_ENERGY_CAN_SPROUT  2
@@ -40,70 +42,88 @@ struct ParticleProps {
 
 struct ParticleProps prop_table[] = {
   { // PTYPE_NONE
-    0x001,  // flags:  empty
+    0x0001,  // flags: empty
     -1,
     -1,
+    0,
     0.f,
   },
   { // PTYPE_SAND
-    0x000,  // flags:  no props
+    0x1000,  // flags: meltable
     -1,
     -1,
+    0,
     0.75f,
   },
   { // PTYPE_WATER
-    0x000,  // flags: no props
+    0x0000,  // flags: no props
     -1,
     -1,
+    0,
     0.9f,
   },
   { // PTYPE_WOOD
-    0x110,  // flags: flammable, dissolvable
+    0x0110,  // flags: flammable, dissolvable
     -1,
     24,
+    0,
     0.8f,
   },
   { // PTYPE_FIRE
-    0x000,  // flags: no props
+    0x0000,  // flags: no props
     24,
     -1,
+    1,
     0.4f,
   },
   { // PTYPE_SMOKE
-    0x001,  // flags: no props
+    0x0001,  // flags: empty
     -1,
     -1,
+    0,
     0.75f,
   },
   { // PTYPE_METAL
-    0x100,  // flags: dissolvable
+    0x1100,  // flags: dissolvable, meltable
     -1,
     64,
+    0,
     0.9f,
   },
   { // PTYPE_ACID
-    0x000,  // flags: no props
+    0x0000,  // flags: no props
     -1,
     -1,
+    2,
     0.9f,
   },
   { // PTYPE_DIRT
-    0x000,  // flags: no props
+    0x0000,  // flags: no props
     -1,
     -1,
+    0,
     0.75f,
   },
   { // PTYPE_SEED
-    0x010,  // flags: flammable
+    0x0010,  // flags: flammable
     SEED_ENERGY_CAN_SEED,
     1,
+    0,
     0.85f,
   },
   { // PTYPE_PLANT
-    0x110,  // flags: dissolvable, flammable
+    0x0110,  // flags: dissolvable, flammable
     8,
     6,
+    0,
     0.9f,
+  },
+  { // PTYPE_LAVA
+    0x0000,
+    -1,
+    -1,
+    1,
+    0.8f,
   },
 };
 
@@ -160,6 +180,12 @@ char Particle_getLastSpreadDir(Particle p) {
 
 float Particle_getSaturation(Particle p) {
   return p->saturation;
+}
+
+void Particle_inflict_damage(Particle p, short damage) {
+  if (p->durability > 0) {
+    p->durability = max(0, p->durability - damage); // never go negative
+  }
 }
 
 void Particle_reset(Particle p) {
@@ -292,18 +318,18 @@ void World_swapParticle(World w, short x1, short y1, short x2, short y2) {
     w->p[y2 * w->w + x2] = temp;
 }
 
-struct Position sim_fall(World w, Particle p, short x, short y) {
-  if (y == w->h -1) {
-    return (struct Position){x, y};
+char sim_fall(World w, Particle p, struct Position *pos) {
+  if (pos->y == w->h -1) {
+    return 0;
   }
 
   // try to fall down at velocity
-  int movey = y;
+  int movey = pos->y;
   for (int k = 1; k <= p->vel; k++) {
-    if (y + k < w->h &&
-        IS_EMPTY(World_getParticle(w, x, y + k)->type)
+    if (pos->y + k < w->h &&
+        IS_EMPTY(World_getParticle(w, pos->x, pos->y + k)->type)
        ) {
-      movey = y + k;
+      movey = pos->y + k;
     }
     else {
       break;
@@ -311,24 +337,26 @@ struct Position sim_fall(World w, Particle p, short x, short y) {
   }
 
   // made a move down
-  if (movey != y) {
-    World_swapParticle(w, x, y, x, movey);
+  if (movey != pos->y) {
+    World_swapParticle(w, pos->x, pos->y, pos->x, movey);
     p->vel = clamp(p->vel + GRAVITY_ACC, -MAX_VEL, MAX_VEL);
-    return (struct Position){x, movey};
+
+    pos->y = movey;
+    return 1;
   }
 
   // didn't move down, try a diagonal down in both directions
-  int bestx = x;
-  int besty = y;
+  int bestx = pos->x;
+  int besty = pos->y;
 
   for (int k = 1; k <= p->vel; k++) {
-    int dy = y + k;
+    int dy = pos->y + k;
     if (dy >= w->h) {
       break;
     }
 
     // begin with the last spread direction
-    int dx = x + p->spread_dir;
+    int dx = pos->x + p->spread_dir;
     for (int i = 0; i <= 1; i++) {
       if (dx < 0 || dx >= w->w) {
         break;
@@ -344,23 +372,26 @@ struct Position sim_fall(World w, Particle p, short x, short y) {
         besty = dy;
       }
       // check other direction for second iteration
-      dx = x - p->spread_dir;
+      dx = pos->x - p->spread_dir;
     }
   }
 
-  if (besty != y) {
-    World_swapParticle(w, x, y, bestx, besty);
-    return (struct Position){bestx, besty};
+  if (besty != pos->y) {
+    World_swapParticle(w, pos->x, pos->y, bestx, besty);
+
+    pos->x = bestx;
+    pos->y = besty;
+    return 1;
   }
 
   // all previous attempts to move failed, it isn't possible right now
   p->vel = START_VEL;
-  return (struct Position){x, y};
+  return 0;
 }
 
-struct Position sim_spread(World w, Particle p, short x, short y) {
-  char left_blocked = x <= 0 || !(IS_EMPTY(World_getParticle(w, x - 1, y)->type));
-  char right_blocked = x >= w->w - 1 || !(IS_EMPTY(World_getParticle(w, x + 1, y)->type));
+char sim_spread(World w, Particle p, struct Position *pos) {
+  char left_blocked = pos->x <= 0 || !(IS_EMPTY(World_getParticle(w, pos->x - 1, pos->y)->type));
+  char right_blocked = pos->x >= w->w - 1 || !(IS_EMPTY(World_getParticle(w, pos->x + 1, pos->y)->type));
 
   // spread left if right is occupied & left is not
   if (right_blocked && !left_blocked) {
@@ -373,9 +404,9 @@ struct Position sim_spread(World w, Particle p, short x, short y) {
   }
 
   // try to move in spread direction
-  int movex = x;
+  int movex = pos->x;
   for (int k = 1; k <= p->spread_vel; k++) {
-    int try_pos = x + p->spread_dir * k;
+    int try_pos = pos->x + p->spread_dir * k;
 
     // moving left but that is out of bounds
     if (p->spread_dir == SPREAD_LEFT &&
@@ -392,7 +423,7 @@ struct Position sim_spread(World w, Particle p, short x, short y) {
     }
 
     // can move again
-    if (IS_EMPTY(World_getParticle(w, try_pos, y)->type)) {
+    if (IS_EMPTY(World_getParticle(w, try_pos, pos->y)->type)) {
       movex = try_pos;
     }
     // cannot move anywhere
@@ -402,24 +433,28 @@ struct Position sim_spread(World w, Particle p, short x, short y) {
   }
 
   // found a move
-  if (movex != x)
+  if (movex != pos->x)
   {
-    World_swapParticle(w, x, y, movex, y);
+    World_swapParticle(w, pos->x, pos->y, movex, pos->y);
     p->vel = START_VEL;
     p->spread_vel = clamp(p->spread_vel + SPREAD_ACC, 0, MAX_SPREAD);
-    return (struct Position){movex, y};
+
+    pos->x = movex;
+    return 1;
   }
 
   // no move
   p->vel = START_VEL;
   p->spread_vel = START_VEL;
-  return (struct Position){x, y};
+
+  return 0;
 }
 
-struct Position sim_burn(World w, Particle p, short x, short y) {
+// TODO: implement damage
+char sim_burn(World w, Particle p, struct Position *pos) {
   char spread = 0;
-  for (int i = x - 1; i <= x + 1; i++) {
-    for (int j = y - 1; j <= y + 1; j++) {
+  for (int i = pos->x - 1; i <= pos->x + 1; i++) {
+    for (int j = pos->y - 1; j <= pos->y + 1; j++) {
       if (i < 0 || i >= w->w || j < 0 || j >= w->h) {
         continue;
       }
@@ -441,7 +476,7 @@ struct Position sim_burn(World w, Particle p, short x, short y) {
       }
       else if (IS_EMPTY(neighbor->type)) {
         // only upwards
-        if (j >= y) {
+        if (j >= pos->y) {
           continue;
         }
 
@@ -457,7 +492,7 @@ struct Position sim_burn(World w, Particle p, short x, short y) {
         }
 
         spread = spread | 0x10; // mark as made smoke
-        World_swapParticle(w, x, y, i, j);
+        World_swapParticle(w, pos->x, pos->y, i, j);
       }
     }
   }
@@ -466,24 +501,24 @@ struct Position sim_burn(World w, Particle p, short x, short y) {
     p->energy = prop_table[p->type].energy;
   }
 
-  return (struct Position){x, y};
+  return 0;
 }
 
-struct Position sim_fall_up(World w, Particle p, short x, short y) {
+char sim_fall_up(World w, Particle p, struct Position *pos) {
   // top of screen, "keep moving up" (clear smoke)
-  if (y == 0) {
+  if (pos->y == 0) {
     Particle_reset(p);
-    return (struct Position){x, y};
+    return 0;
   }
 
   // try to move up at velocity
-  int movey = y;
+  int movey = pos->y;
   for (int k = -1; k <= -1; k++) { // TODO: temp
-    if (y + k < w->h &&
-        IS_EMPTY(World_getParticle(w, x, y + k)->type) && // move into empty
-        World_getParticle(w, x, y + k)->type != p->type   // don't move into your own type
+    if (pos->y + k < w->h &&
+        IS_EMPTY(World_getParticle(w, pos->x, pos->y + k)->type) && // move into empty
+        World_getParticle(w, pos->x, pos->y + k)->type != p->type   // don't move into your own type
        ) {
-      movey = y + k;
+      movey = pos->y + k;
     }
     else {
       break;
@@ -491,19 +526,21 @@ struct Position sim_fall_up(World w, Particle p, short x, short y) {
   }
 
   // made a move up
-  if (movey != y) {
-    World_swapParticle(w, x, y, x, movey);
+  if (movey != pos->y) {
+    World_swapParticle(w, pos->x, pos->y, pos->x, movey);
     p->vel = clamp(p->vel + GRAVITY_ACC, -MAX_VEL, MAX_VEL);
-    return (struct Position){x, movey};
+
+    pos->y = movey;
+    return 1;
   }
 
   // did nothing
-  return (struct Position){x, movey};
+  return 0;
 }
 
-struct Position sim_spread_gas(World w, Particle p, short x, short y) {
-  char left_blocked = x <= 0 || !(IS_EMPTY(World_getParticle(w, x - 1, y)->type));
-  char right_blocked = x >= w->w - 1 || !(IS_EMPTY(World_getParticle(w, x + 1, y)->type));
+char sim_spread_gas(World w, Particle p, struct Position *pos) {
+  char left_blocked = pos->x <= 0 || !(IS_EMPTY(World_getParticle(w, pos->x - 1, pos->y)->type));
+  char right_blocked = pos->x >= w->w - 1 || !(IS_EMPTY(World_getParticle(w, pos->x + 1, pos->y)->type));
 
   // random chance to switch direction
   if (randFloat() <= 0.02f) {
@@ -522,13 +559,13 @@ struct Position sim_spread_gas(World w, Particle p, short x, short y) {
 
   // chance to not try to spread
   if (randFloat() <= 0.85f) {
-    return (struct Position){x, y};
+    return 0;
   }
 
   // try to move in spread direction
-  int movex = x;
+  int movex = pos->x;
   for (int k = 1; k <= 1; k++) {
-    int try_pos = x + p->spread_dir * k;
+    int try_pos = pos->x + p->spread_dir * k;
 
     // moving left but that is out of bounds
     if (p->spread_dir == SPREAD_LEFT &&
@@ -545,7 +582,7 @@ struct Position sim_spread_gas(World w, Particle p, short x, short y) {
     }
 
     // can move again
-    if (IS_EMPTY(World_getParticle(w, try_pos, y)->type)) {
+    if (IS_EMPTY(World_getParticle(w, try_pos, pos->y)->type)) {
       movex = try_pos;
     }
     // cannot move anywhere
@@ -555,31 +592,34 @@ struct Position sim_spread_gas(World w, Particle p, short x, short y) {
   }
 
   // found a move
-  if (movex != x)
+  if (movex != pos->x)
   {
-    World_swapParticle(w, x, y, movex, y);
+    World_swapParticle(w, pos->x, pos->y, movex, pos->y);
     p->vel = START_VEL;
     p->spread_vel = clamp(p->spread_vel + SPREAD_ACC, 0, MAX_SPREAD);
-    return (struct Position){movex, y};
+
+    pos->x = movex;
+    return 1;
   }
 
   // no move
   p->vel = START_VEL;
   p->spread_vel = START_VEL;
-  return (struct Position){x, y};
+
+  return 0;
 }
 
-struct Position sim_dissolve(World w, Particle p, short x, short y) {
+char sim_dissolve(World w, Particle p, struct Position *pos) {
   // search all neighbors (below & left/right) for something dissolvable
-  for (int i = x - 1; i <= x + 1; i++) {
-    for (int j = y; j <= y + 1; j++) {
+  for (int i = pos->x - 1; i <= pos->x + 1; i++) {
+    for (int j = pos->y; j <= pos->y + 1; j++) {
       // skip out of bounds
       if (i < 0 || i >= w->w || j < 0 || j >= w->h) {
         continue;
       }
 
       // skip over your own self
-      if (i == x && j == y) {
+      if (i == pos->x && j == pos->y) {
         continue;
       }
 
@@ -588,116 +628,150 @@ struct Position sim_dissolve(World w, Particle p, short x, short y) {
       if (IS_DISSOLVABLE(neighbor->type) &&
           neighbor->durability > 0) {
         World_activateCell(w, i, j);
-        neighbor->durability -= 1; // decrease neighbor's durability
+        Particle_inflict_damage(neighbor, prop_table[p->type].damage);
       }
     }
   }
 
-  return (struct Position){x, y};
+  return 0;
 }
 
-struct Position sim_seed(World w, Particle p, short x, short y) {
+char sim_seed(World w, Particle p, struct Position *pos) {
   // cannot burrow any further
-  if (y == w->h - 1) {
-    return (struct Position){x, y};
+  if (pos->y == w->h - 1) {
+    return 0;
   }
 
   // try to burrow
   // you can burrow only in dirt surrounded by dirt horizontally
-  if (x == 0 || x == w->w - 1) { // dirt cannot be surrounded horizontally
-    return (struct Position){x, y};
+  if (pos->x == 0 || pos->x == w->w - 1) { // dirt cannot be surrounded horizontally
+    return 0;
   }
 
-  Particle below = World_getParticle(w, x, y + 1);
-  for (int i = x - 1; i <= x + 1; i++) { // ensure its surrounded by dirt
+  Particle below = World_getParticle(w, pos->x, pos->y + 1);
+  for (int i = pos->x - 1; i <= pos->x + 1; i++) { // ensure its surrounded by dirt
     if (below->type != PTYPE_DIRT) {
-      return (struct Position){x, y};
+      return 0;
     }
   }
 
   // only burrow if you have enough energy
   if (p->energy < SEED_ENERGY_CAN_SEED) {
-    return (struct Position){x, y};
+    return 0;
   }
 
   // burrow into dirt
   Particle_reset(p);
   Particle_setType(below, PTYPE_SEED);
   below->energy = SEED_ENERGY_CAN_SPROUT;
-  World_activateCell(w, x, y + 1); // activate new cell
+  World_activateCell(w, pos->x, pos->y + 1); // activate new cell
 
-  return (struct Position){x, y + 1};
+  pos->y = pos->y + 1;
+  return 1;
 }
 
-struct Position sim_sprout(World w, Particle p, short x, short y) {
+char sim_sprout(World w, Particle p, struct Position *pos) {
   // only sprout if its the right time
   if (p->energy != SEED_ENERGY_CAN_SPROUT) {
-    return (struct Position){x, y};
+    return 0;
   }
 
   // turn into a plant
   Particle_setType(p, PTYPE_PLANT);
-  World_activateCell(w, x, y);
+  World_activateCell(w, pos->x, pos->y);
 
-  return (struct Position){x, y};
+  return 0;
 }
 
-struct Position sim_grow(World w, Particle p, short x, short y) {
+char sim_grow(World w, Particle p, struct Position *pos) {
   // only grow if has energy (infinite energy means its already grown)
   if (p->energy <= 1) {
-    return (struct Position){x, y};
+    return 0;
   }
 
   // chance to wait to grow
   if (randFloat() <= 0.98f) {
-    World_activateCell(w, x, y); // keep alive
-    return (struct Position){x, y};
+    World_activateCell(w, pos->x, pos->y); // keep alive
+    return 0;
   }
 
-  short growx = x;
-  short growy = y;
+  short growx = pos->x;
+  short growy = pos->y;
 
   // prefer to grow up
-  if (y > 0 &&
-      IS_EMPTY(World_getParticle(w, x, y - 1)->type)
+  if (pos->y > 0 &&
+      IS_EMPTY(World_getParticle(w, pos->x, pos->y - 1)->type)
      ) {
-    growy = y - 1;
+    growy = pos->y - 1;
   }
 
   // random grow x (but bias towards straight)
   float grow_dir = randFloat();
-  char lose_energy = randFloat() <= 0.9f;
+  char lose_energy = randFloat() <= 0.75f;
   if (grow_dir < 0.2f &&
-      x > 0 &&
-      IS_EMPTY(World_getParticle(w, x - 1, growy)->type)
+      pos->x > 0 &&
+      IS_EMPTY(World_getParticle(w, pos->x - 1, growy)->type)
       ) { // left
-    growx = x - 1;
+    growx = pos->x - 1;
     Particle new_sprout = World_getParticle(w, growx, growy);
     Particle_setType(new_sprout, PTYPE_PLANT);
     new_sprout->energy = p->energy - lose_energy;
   }
   else if (grow_dir > 0.8f &&
-           x < w->w - 1 &&
-           IS_EMPTY(World_getParticle(w, x + 1, growy)->type)
+           pos->x < w->w - 1 &&
+           IS_EMPTY(World_getParticle(w, pos->x + 1, growy)->type)
            ) { // right
-    growx = x + 1;
+    growx = pos->x + 1;
     Particle new_sprout = World_getParticle(w, growx, growy);
     Particle_setType(new_sprout, PTYPE_PLANT);
     new_sprout->energy = p->energy - lose_energy;
   }
-  else if (IS_EMPTY(World_getParticle(w, x, growy)->type)) { // straight
+  else if (IS_EMPTY(World_getParticle(w, pos->x, growy)->type)) { // straight
     Particle new_sprout = World_getParticle(w, growx, growy);
     Particle_setType(new_sprout, PTYPE_PLANT);
     new_sprout->energy = p->energy - lose_energy;
   }
 
   // activate cell if grew
-  if (growx != x || growy != y) {
+  if (growx != pos->x || growy != pos->y) {
     World_activateCell(w, growx, growy);
   }
   // don't try to grow again
   p->energy = -1;
-  return (struct Position){growx, growy};
+
+  pos->x = growx;
+  pos->y = growy;
+  return 1;
+}
+
+char sim_melt(World w, Particle p, struct Position *pos) {
+  // NOTE: very similar to sim_dissolve
+  // search all neighbors (below & left/right) for something dissolvable
+  for (int i = pos->x - 1; i <= pos->x + 1; i++) {
+    for (int j = pos->y; j <= pos->y + 1; j++) {
+      // skip if out of bounds
+      if (i < 0 || i >= w->w || j < 0 || j >= w->h) {
+        continue;
+      }
+
+      // skip over self
+      if (i == pos->x && j == pos->y) {
+        continue;
+      }
+
+      Particle neighbor = World_getParticle(w, i, j);
+
+      if (IS_MELTABLE(neighbor->type)) {
+        World_activateCell(w, i, j);
+        Particle_inflict_damage(neighbor, prop_table[p->type].damage);
+      }
+      else if (IS_FLAMMABLE(neighbor->type)) {
+        sim_burn(w, p, pos);
+      }
+    }
+  }
+
+  return 0;
 }
 
 void World_simulate(World w) {
@@ -737,12 +811,11 @@ void World_simulate(World w) {
           // simulate each particle type appropriately
           switch (current->type) {
             case PTYPE_SAND:
-              pos = sim_fall(w, current, pos.x, pos.y);
+              sim_fall(w, current, &pos);
             break;
             case PTYPE_WATER:
-              pos = sim_fall(w, current, pos.x, pos.y);
-              if (pos.x == i && pos.y == j) { // if falling failed
-                pos = sim_spread(w, current, pos.x, pos.y);
+              if (!sim_fall(w, current, &pos)) {
+                sim_spread(w, current, &pos);
               }
             break;
             case PTYPE_WOOD:
@@ -751,40 +824,49 @@ void World_simulate(World w) {
             case PTYPE_FIRE:
               World_activateCell(w, pos.x, pos.y);
               current->energy -= 1;
-              pos = sim_burn(w, current, pos.x, pos.y);
+              sim_burn(w, current, &pos);
             break;
             case PTYPE_SMOKE:
-              pos = sim_fall_up(w, current, pos.x, pos.y);
-              pos = sim_spread_gas(w, current, pos.x, pos.y);
+              sim_fall_up(w, current, &pos);
+              sim_spread_gas(w, current, &pos);
             break;
             case PTYPE_METAL:
               // empty: metal does nothing
             break;
             case PTYPE_ACID:
               // behave like water
-              pos = sim_fall(w, current, pos.x, pos.y);
+              sim_fall(w, current, &pos);
               if (pos.x == i && pos.y == j) { // if falling failed
-                pos = sim_spread(w, current, pos.x, pos.y);
+                sim_spread(w, current, &pos);
               }
-              pos = sim_dissolve(w, current, pos.x, pos.y);
+              // dissolve
+              sim_dissolve(w, current, &pos);
             break;
             case PTYPE_DIRT:
               // behave like sand
-              pos = sim_fall(w, current, pos.x, pos.y);
+              sim_fall(w, current, &pos);
             break;
             case PTYPE_SEED:
               // fall and then burrow
-              pos = sim_fall(w, current, pos.x, pos.y);
+              sim_fall(w, current, &pos);
               // save time on this if depleted
               if (current->energy == SEED_ENERGY_DEPLETED) {
                 break;
               }
-              pos = sim_seed(w, current, pos.x, pos.y);
-              pos = sim_sprout(w, current, pos.x, pos.y);
+              sim_seed(w, current, &pos);
+              sim_sprout(w, current, &pos);
             break;
             case PTYPE_PLANT:
-              sim_grow(w, current, pos.x, pos.y);
+              sim_grow(w, current, &pos);
             break;
+            case PTYPE_LAVA:
+              // behave like water
+              sim_fall(w, current, &pos);
+              if (pos.x == i && pos.y == j) { // if falling failed
+                sim_spread(w, current, &pos);
+              }
+              // melt
+              sim_melt(w, current, &pos);
           }
 
           if (current->energy == 0 ||

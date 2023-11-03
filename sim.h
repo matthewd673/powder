@@ -1,6 +1,6 @@
 #define CELL_SIZE   8   // cell size must be 8 to fit in tick status array
 
-#define PTYPE_LEN   11
+#define PTYPE_LEN   12
 #define PTYPE_NONE  0
 #define PTYPE_SAND  1
 #define PTYPE_WATER 2
@@ -12,6 +12,7 @@
 #define PTYPE_DIRT  8
 #define PTYPE_SEED  9
 #define PTYPE_PLANT 10
+#define PTYPE_LAVA  11
 
 #define SPREAD_LEFT   -1
 #define SPREAD_RIGHT  1
