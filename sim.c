@@ -20,7 +20,11 @@ struct Particle {
   float vel;
   char spread_dir;
   float spread_vel;
+
   float saturation;
+
+  char log_type;
+  float log_amount;
 };
 
 struct ParticleProps {
@@ -31,10 +35,17 @@ struct ParticleProps {
   float min_saturation;
 };
 
-#define IS_EMPTY(p)         (prop_table[p].flags & 0x1)
-#define IS_FLAMMABLE(p)     (prop_table[p].flags & 0x10)
-#define IS_DISSOLVABLE(p)   (prop_table[p].flags & 0x100)
-#define IS_MELTABLE(p)      (prop_table[p].flags & 0x1000)
+#define FLAG_EMPTY          1
+#define FLAG_FLUID          2
+#define FLAG_FLAMMABLE      4
+#define FLAG_DISSOLVABLE    8
+#define FLAG_MELTABLE       16
+
+#define IS_EMPTY(p)         (prop_table[p].flags & FLAG_EMPTY)
+#define IS_FLUID(p)         (prop_table[p].flags & FLAG_FLUID)
+#define IS_FLAMMABLE(p)     (prop_table[p].flags & FLAG_FLAMMABLE)
+#define IS_DISSOLVABLE(p)   (prop_table[p].flags & FLAG_DISSOLVABLE)
+#define IS_MELTABLE(p)      (prop_table[p].flags & FLAG_MELTABLE)
 
 #define SEED_ENERGY_CAN_SEED    3
 #define SEED_ENERGY_CAN_SPROUT  2
@@ -42,84 +53,84 @@ struct ParticleProps {
 
 struct ParticleProps prop_table[] = {
   { // PTYPE_NONE
-    0x0001,  // flags: empty
+    FLAG_EMPTY,
     -1,
     -1,
     0,
     0.f,
   },
   { // PTYPE_SAND
-    0x1000,  // flags: meltable
+    FLAG_MELTABLE, // TODO: sand melting (into glass?)
     -1,
     -1,
     0,
     0.75f,
   },
   { // PTYPE_WATER
-    0x0000,  // flags: no props
+    FLAG_FLUID,
     -1,
     -1,
     0,
     0.9f,
   },
   { // PTYPE_WOOD
-    0x0110,  // flags: flammable, dissolvable
+    FLAG_FLAMMABLE | FLAG_DISSOLVABLE,
     -1,
     24,
     0,
     0.8f,
   },
   { // PTYPE_FIRE
-    0x0000,  // flags: no props
+    0, // no flags
     24,
     -1,
     1,
     0.4f,
   },
   { // PTYPE_SMOKE
-    0x0001,  // flags: empty
+    FLAG_EMPTY,
     -1,
     -1,
     0,
     0.75f,
   },
   { // PTYPE_METAL
-    0x1100,  // flags: dissolvable, meltable
+    FLAG_DISSOLVABLE | FLAG_MELTABLE,
     -1,
     64,
     0,
     0.9f,
   },
   { // PTYPE_ACID
-    0x0000,  // flags: no props
+    FLAG_FLUID,
     -1,
     -1,
     2,
     0.9f,
   },
   { // PTYPE_DIRT
-    0x0000,  // flags: no props
+    0, // no flags
     -1,
     -1,
     0,
     0.75f,
   },
   { // PTYPE_SEED
-    0x0010,  // flags: flammable
+    FLAG_DISSOLVABLE | FLAG_FLAMMABLE,
     SEED_ENERGY_CAN_SEED,
     1,
     0,
     0.85f,
   },
   { // PTYPE_PLANT
-    0x0110,  // flags: dissolvable, flammable
+    FLAG_DISSOLVABLE | FLAG_FLAMMABLE,
     8,
     6,
     0,
     0.9f,
   },
   { // PTYPE_LAVA
-    0x0000,
+    FLAG_FLUID,
     -1,
     -1,
     1,
@@ -127,16 +138,22 @@ struct ParticleProps prop_table[] = {
   },
 };
 
+struct LogCell {
+  float log_sum;
+  char log_type;
+};
+
 struct World {
+  // particle grid
   Particle *p;
   short w;
   short h;
 
-  char *c;
-  short cw;
-  short ch;
-
-  unsigned long *cs;
+  // cells
+  char *c_active;
+  unsigned long *c_tick;
+  short c_w;
+  short c_h;
 };
 
 struct Position {
@@ -157,29 +174,48 @@ Particle new_Particle(char type) {
 
   this->vel = START_VEL;
   this->spread_vel = START_SPREAD;
-  this->spread_dir = randBoolean() ? SPREAD_LEFT : SPREAD_RIGHT;
+  this->spread_dir = rand_boolean() ? SPREAD_LEFT : SPREAD_RIGHT;
 
-  this->saturation = randFloatRange(prop_table[type].min_saturation, 1.f);
+  this->saturation = rand_float_range(prop_table[type].min_saturation, 1.f);
+
+  this->log_type = IS_FLUID(type) ? type : PTYPE_NONE; // fluids log themselves
+  this->log_amount = IS_FLUID(type) ? 1.f : 0.f; // fluids are fully logged
 
   return this;
 }
 
-char Particle_getType(Particle p) {
+char Particle_get_type(Particle p) {
   return p->type;
 }
-void Particle_setType(Particle p, char type) {
+void Particle_set_type(Particle p, char type) {
   p->type = type;
   p->energy = prop_table[p->type].energy;
   p->durability = prop_table[p->type].durability;
-  p->saturation = randFloatRange(prop_table[type].min_saturation, 1.f);
+
+  p->saturation = rand_float_range(prop_table[type].min_saturation, 1.f);
+
+  p->log_type = IS_FLUID(type) ? type : PTYPE_NONE;
+  p->log_amount = IS_FLUID(type) ? 1.f : 0.f;
 }
 
-char Particle_getLastSpreadDir(Particle p) {
+char Particle_get_spread_dir(Particle p) {
   return p->spread_dir;
 }
 
-float Particle_getSaturation(Particle p) {
+float Particle_get_saturation(Particle p) {
   return p->saturation;
+}
+
+char Particle_get_log_type(Particle p) {
+  return p->log_type;
+}
+
+float Particle_get_log_amount(Particle p) {
+  return p->log_amount;
+}
+
+char Particle_is_fluid(Particle p) {
+  return IS_FLUID(p->type);
 }
 
 void Particle_inflict_damage(Particle p, short damage) {
@@ -195,7 +231,10 @@ void Particle_reset(Particle p) {
 
   p->vel = START_VEL;
   p->spread_vel = START_SPREAD;
-  p->spread_dir = randBoolean() ? SPREAD_LEFT : SPREAD_RIGHT;
+  p->spread_dir = rand_boolean() ? SPREAD_LEFT : SPREAD_RIGHT;
+
+  p->log_type = PTYPE_NONE;
+  p->log_amount = 0.f;
 }
 
 World new_World(short width, short height) {
@@ -223,22 +262,22 @@ World new_World(short width, short height) {
 
     // generate cells
     printf("Beginning world cell init\n");
-    this->cw = width / CELL_SIZE;
+    this->c_w = width / CELL_SIZE;
     if (width % CELL_SIZE > 0) {
-      this->cw += 1;
+      this->c_w += 1;
     }
-    this->ch = height / CELL_SIZE;
+    this->c_h = height / CELL_SIZE;
     if (height % CELL_SIZE > 0) {
-      this->ch += 1;
+      this->c_h += 1;
     }
-    printf("World cell size: %dx%d (%d)\n", this->cw, this->ch, this->cw * this->ch);
+    printf("World cell size: %dx%d (%d)\n", this->c_w, this->c_h, this->c_w * this->c_h);
 
-    this->c = (char *)malloc(this->cw * this->ch * sizeof(short));
-    for (int i = 0; i < this->cw * this->ch; i++) {
-        this->c[i] = 1; // default all cells to on
+    this->c_active = (char *)malloc(this->c_w * this->c_h * sizeof(short));
+    for (int i = 0; i < this->c_w * this->c_h; i++) {
+      this->c_active[i] = 1; // default all cells to on
     }
 
-    this->cs = (unsigned long *)malloc(this->cw * this->ch * sizeof(unsigned long));
+    this->c_tick = (unsigned long *)malloc(this->c_w * this->c_h * sizeof(unsigned long));
 
     printf("Done world cell init\n");
 
@@ -247,38 +286,38 @@ World new_World(short width, short height) {
 
 void free_World(World w) {
     free(w->p);
-    free(w->c);
-    free(w->cs);
+    free(w->c_active);
+    free(w->c_tick);
     free(w);
 }
 
 short World_getCellWidth(World w) {
-    return w->cw;
+    return w->c_w;
 }
 
 short World_getCellHeight(World w) {
-    return w->ch;
+    return w->c_h;
 }
 
 void World_activateCell(World w, short x, short y) {
     short cx = x / CELL_SIZE;
     short cy = y / CELL_SIZE;
 
-    short i = cy * w->cw + cx;
-    w->c[i] = 2; // 2 chances to stay active
+    short i = cy * w->c_w + cx;
+    w->c_active[i] = 2; // 2 chances to stay active
 
     // activate surrounding cells (no diagonals)
     if (cx > 0) {
-      w->c[i - 1] = 2;
+      w->c_active[i - 1] = 2;
     }
-    if (cx < w->cw - 1) {
-      w->c[i + 1] = 2;
+    if (cx < w->c_w - 1) {
+      w->c_active[i + 1] = 2;
     }
     if (cy > 0) {
-      w->c[i - w->cw] = 2;
+      w->c_active[i - w->c_w] = 2;
     }
-    if (cy < w->ch - 1) {
-      w->c[i + w->cw] = 2;
+    if (cy < w->c_h - 1) {
+      w->c_active[i + w->c_w] = 2;
     }
 }
 
@@ -286,11 +325,11 @@ char World_getCellStatus(World w, short x, short y) {
     short cx = x / CELL_SIZE;
     short cy = y / CELL_SIZE;
 
-    return w->c[cy * w->cw + cx];
+    return w->c_active[cy * w->c_w + cx];
 }
 
 char World_getCellStatusExact(World w, short cx, short cy) {
-    return w->c[cy * w->cw + cx];
+    return w->c_active[cy * w->c_w + cx];
 }
 
 Particle World_getParticle(World w, short x, short y) {
@@ -467,10 +506,10 @@ char sim_burn(World w, Particle p, struct Position *pos) {
           continue;
         }
         // random chance to spread (50%)
-        if (randFloat() > 0.5f) {
+        if (rand_float() > 0.5f) {
           continue;
         }
-        Particle_setType(neighbor, PTYPE_FIRE); // always spread as fire
+        Particle_set_type(neighbor, PTYPE_FIRE); // always spread as fire
         neighbor->energy = prop_table[neighbor->type].energy;
         spread = spread | 0x1; // mark as spread to flammable material
       }
@@ -481,11 +520,11 @@ char sim_burn(World w, Particle p, struct Position *pos) {
         }
 
         // 20% chance to spread
-        if (randFloat() > 0.2) {
+        if (rand_float() > 0.2) {
           continue;
         }
         // else, 2% chance to make smoke
-        else if (randFloat() <= 0.02) {
+        else if (rand_float() <= 0.02) {
           Particle above = World_getParticle(w, i, j);
           above->type = PTYPE_SMOKE;
           above->energy = prop_table[above->type].energy;
@@ -543,7 +582,7 @@ char sim_spread_gas(World w, Particle p, struct Position *pos) {
   char right_blocked = pos->x >= w->w - 1 || !(IS_EMPTY(World_getParticle(w, pos->x + 1, pos->y)->type));
 
   // random chance to switch direction
-  if (randFloat() <= 0.02f) {
+  if (rand_float() <= 0.02f) {
     p->spread_dir = -p->spread_dir;
   }
 
@@ -558,7 +597,7 @@ char sim_spread_gas(World w, Particle p, struct Position *pos) {
   }
 
   // chance to not try to spread
-  if (randFloat() <= 0.85f) {
+  if (rand_float() <= 0.85f) {
     return 0;
   }
 
@@ -662,7 +701,7 @@ char sim_seed(World w, Particle p, struct Position *pos) {
 
   // burrow into dirt
   Particle_reset(p);
-  Particle_setType(below, PTYPE_SEED);
+  Particle_set_type(below, PTYPE_SEED);
   below->energy = SEED_ENERGY_CAN_SPROUT;
   World_activateCell(w, pos->x, pos->y + 1); // activate new cell
 
@@ -677,7 +716,7 @@ char sim_sprout(World w, Particle p, struct Position *pos) {
   }
 
   // turn into a plant
-  Particle_setType(p, PTYPE_PLANT);
+  Particle_set_type(p, PTYPE_PLANT);
   World_activateCell(w, pos->x, pos->y);
 
   return 0;
@@ -690,7 +729,7 @@ char sim_grow(World w, Particle p, struct Position *pos) {
   }
 
   // chance to wait to grow
-  if (randFloat() <= 0.98f) {
+  if (rand_float() <= 0.98f) {
     World_activateCell(w, pos->x, pos->y); // keep alive
     return 0;
   }
@@ -706,15 +745,15 @@ char sim_grow(World w, Particle p, struct Position *pos) {
   }
 
   // random grow x (but bias towards straight)
-  float grow_dir = randFloat();
-  char lose_energy = randFloat() <= 0.75f;
+  float grow_dir = rand_float();
+  char lose_energy = rand_float() <= 0.75f;
   if (grow_dir < 0.2f &&
       pos->x > 0 &&
       IS_EMPTY(World_getParticle(w, pos->x - 1, growy)->type)
       ) { // left
     growx = pos->x - 1;
     Particle new_sprout = World_getParticle(w, growx, growy);
-    Particle_setType(new_sprout, PTYPE_PLANT);
+    Particle_set_type(new_sprout, PTYPE_PLANT);
     new_sprout->energy = p->energy - lose_energy;
   }
   else if (grow_dir > 0.8f &&
@@ -723,12 +762,12 @@ char sim_grow(World w, Particle p, struct Position *pos) {
            ) { // right
     growx = pos->x + 1;
     Particle new_sprout = World_getParticle(w, growx, growy);
-    Particle_setType(new_sprout, PTYPE_PLANT);
+    Particle_set_type(new_sprout, PTYPE_PLANT);
     new_sprout->energy = p->energy - lose_energy;
   }
   else if (IS_EMPTY(World_getParticle(w, pos->x, growy)->type)) { // straight
     Particle new_sprout = World_getParticle(w, growx, growy);
-    Particle_setType(new_sprout, PTYPE_PLANT);
+    Particle_set_type(new_sprout, PTYPE_PLANT);
     new_sprout->energy = p->energy - lose_energy;
   }
 
@@ -774,23 +813,22 @@ char sim_melt(World w, Particle p, struct Position *pos) {
   return 0;
 }
 
+unsigned long sim_frames = 0;
 void World_simulate(World w) {
   // loop through every cell
-  short active_ct = 0;
-  for (short ci = 0; ci < w->cw; ci++) {
-    for (short cj = w->ch - 1; cj >= 0; cj--) {
-      int c_index = cj * w->ch + ci;
-      char active = w->c[c_index];
+  for (short ci = 0; ci < w->c_w; ci++) {
+    for (short cj = w->c_h - 1; cj >= 0; cj--) {
+      int c_index = cj * w->c_h + ci;
+      char active = w->c_active[c_index];
 
       if (!active) {
         continue;
       }
-      active_ct++;
 
       // deactivate cell
       // cells have 2 chances to stay active before they're turned off
       // (so that particles falling into a cell and activating it don't get stuck)
-      w->c[c_index]--;
+      w->c_active[c_index]--;
 
       // simulate particles within cell
       for (short i = ci * CELL_SIZE; i < (ci + 1) * CELL_SIZE; i++) {
@@ -803,7 +841,7 @@ void World_simulate(World w) {
           unsigned long c_mask = ((long)0x1) << (ry * CELL_SIZE + rx);
 
           // check if particle ticked
-          if ((w->cs[c_index] & c_mask) != 0) {
+          if ((w->c_tick[c_index] & c_mask) != 0) {
             continue;
           }
 
@@ -881,15 +919,17 @@ void World_simulate(World w) {
           int new_ry = pos.y % CELL_SIZE; // relative y in cell
           unsigned long new_c_mask = ((long)0x1) << (new_ry * CELL_SIZE + new_rx);
 
-          int new_c_index = new_cy * w->ch + new_cx;
-          w->cs[new_c_index] |= new_c_mask;
+          int new_c_index = new_cy * w->c_h + new_cx;
+          w->c_tick[new_c_index] |= new_c_mask;
         }
       }
     }
+
+    sim_frames += 1;
   }
 
   // reset all cell status
-  for (int i = 0; i < w->cw * w->ch; i++) {
-    w->cs[i] = 0;
+  for (int i = 0; i < w->c_w * w->c_h; i++) {
+    w->c_tick[i] = 0;
   }
 }

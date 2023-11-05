@@ -113,8 +113,8 @@ int main(int argc, char *argv[]) {
           Particle existing = World_getParticle(w, pX, pY);
           // placing a new particle
           if (newParticleType != PTYPE_NONE) {
-            if (Particle_getType(existing) == PTYPE_NONE) {
-              Particle_setType(
+            if (Particle_get_type(existing) == PTYPE_NONE) {
+              Particle_set_type(
                 existing,
                 newParticleType
               );
@@ -123,7 +123,7 @@ int main(int argc, char *argv[]) {
           }
           // erasing
           else {
-            if (Particle_getType(existing) != PTYPE_NONE) {
+            if (Particle_get_type(existing) != PTYPE_NONE) {
               World_resetParticle(w, pX, pY);
             }
           }
@@ -149,10 +149,10 @@ int main(int argc, char *argv[]) {
           for (short j = cj * CELL_SIZE; j < (cj + 1) * CELL_SIZE; j++) {
             Particle p = World_getParticle(w, i, j);
             // determine particle color
-            Color col = color_map[Particle_getType(p)];
-            col.r *= Particle_getSaturation(p);
-            col.g *= Particle_getSaturation(p);
-            col.b *= Particle_getSaturation(p);
+            Color base_col = color_map[Particle_get_type(p)];
+            base_col.r *= Particle_get_saturation(p);
+            base_col.g *= Particle_get_saturation(p);
+            base_col.b *= Particle_get_saturation(p);
 
             // DEBUGGING: visualizing water spread direction
 //            if (Particle_getType(p) == PTYPE_SMOKE &&
@@ -169,7 +169,7 @@ int main(int argc, char *argv[]) {
 
             DrawRectangle(i * PARTICLE_SCALE, -j * PARTICLE_SCALE + WINDOW_HEIGHT,
                           PARTICLE_SCALE, PARTICLE_SCALE,
-                          col);
+                          base_col);
           }
         }
       }

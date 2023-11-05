@@ -10,7 +10,7 @@ float clamp(float f, float min, float max) {
     return (c > max) ? max : c;
 }
 
-float randFloat() {
+float rand_float() {
     if (!rand_init) {
         rand_init = 1;
         srand(time(NULL));
@@ -18,12 +18,12 @@ float randFloat() {
     return rand() / (float)RAND_MAX;
 }
 
-float randFloatRange(float min, float max) {
-  return min + (max - min) * randFloat();
+float rand_float_range(float min, float max) {
+  return min + (max - min) * rand_float();
 }
 
-char randBoolean() {
-  return randFloat() >= 0.5f;
+char rand_boolean() {
+  return rand_float() >= 0.5f;
 }
 
 int min(int a, int b) {

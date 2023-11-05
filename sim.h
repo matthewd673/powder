@@ -1,4 +1,5 @@
 #define CELL_SIZE   8   // cell size must be 8 to fit in tick status array
+#define LOGMAP_RES  4   // log map res should fit nicely inside cells
 
 #define PTYPE_LEN   12
 #define PTYPE_NONE  0
@@ -22,10 +23,13 @@ typedef struct World *World;
 
 Particle new_Particle(char type);
 
-char Particle_getType(Particle p);
-void Particle_setType(Particle p, char type);
-char Particle_getLastSpreadDir(Particle p);
-float Particle_getSaturation(Particle p);
+char Particle_get_type(Particle p);
+void Particle_set_type(Particle p, char type);
+char Particle_get_spread_dir(Particle p);
+float Particle_get_saturation(Particle p);
+char Particle_get_log_type(Particle p);
+float Particle_get_log_amount(Particle p);
+char Particle_is_fluid(Particle p);
 
 World new_World(short width, short height);
 void free_World(World w);
